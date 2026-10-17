@@ -186,10 +186,10 @@ code { background: var(--surface-2); border: 1px solid var(--line); border-radiu
 .dd-group { padding: 10px 10px 4px; font-size: 0.8rem; font-weight: 600; color: var(--muted); }
 .dd-opt { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 6px; cursor: pointer; }
 .dd-opt .dd-meta { margin-right: auto; }
-.dd-opt svg { opacity: 0; color: var(--accent); flex: none; }
+.dd-opt .dd-check { opacity: 0; color: var(--accent); flex: none; }
 .dd-opt.active { background: var(--accent-soft); }
 .dd-opt[aria-selected="true"] .dd-name { color: var(--accent); }
-.dd-opt[aria-selected="true"] svg { opacity: 1; }
+.dd-opt[aria-selected="true"] .dd-check { opacity: 1; }
 
 
 .monitor-panel { padding: 14px; display: grid; gap: 14px; }
@@ -478,3 +478,14 @@ input[type="color"] {
   max-height: 420px; overflow: auto;
 }
 .prompt-box summary { cursor: pointer; font-weight: 600; padding: 4px 0 10px; }
+
+/* hear-a-voice buttons */
+.dd-play {
+  flex: none; width: 30px; height: 30px; border-radius: 50%; padding: 0; cursor: pointer;
+  display: grid; place-items: center; background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+}
+.dd-play:hover { border-color: var(--accent); color: var(--accent); }
+.dd-play.playing { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.dd-play.loading { color: var(--accent); border-color: var(--accent); }
+.dd-play.loading svg { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

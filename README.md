@@ -22,7 +22,7 @@ Open http://localhost:3000
 - **Footage matching:** results are ranked by how well their tags match each scene. Long scenes get several shots. When no good video exists, a photo with a slow zoom is used.
 - **Captions:** style presets, position, size, font, colours, background box, uppercase, words at a time, fade or pop animation, live preview. A captions file (SRT) is saved with each video.
 - **Branding:** text or logo watermark (position, size, opacity), title card, closing card.
-- **Look and sound:** narrator and character voices, speaking speed, background music with volume, colour looks, soft fades.
+- **Look and sound:** narrator and character voices (press the play button next to a voice to hear it), speaking speed, background music with volume, colour looks, soft fades.
 - **Output:** 16:9 or 9:16, 720p or 1080p.
 - **Library:** search, filter, watch, download, reuse a script with all its settings, delete one or all.
 - Light and dark mode. Quick start presets for YouTube, Shorts/Reels/TikTok, Cinematic and Clean.

@@ -40,6 +40,8 @@ const ICONS = {
   check: '<path d="M5 12l5 5 9-10"/>',
   music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="1.5"/>',
+  loader: '<path d="M12 3a9 9 0 1 0 9 9"/>',
   file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
 };
 
@@ -369,7 +371,7 @@ function go(tab) { if (location.hash === `#${tab}`) route(); else location.hash 
 // ---------- Dropdowns ----------
 const dropdowns = [];
 
-function makeDropdown({ id, groups, onChange }) {
+function makeDropdown({ id, groups, onChange, speaker = null }) {
   const root = $(`#${id}Dd`), input = $(`#${id}`), btn = $(`#${id}Btn`), menu = $(`#${id}Menu`);
   const nameEl = $(`#${id}Name`), metaEl = $(`#${id}Meta`);
   const flat = groups.flatMap((g) => g.items);
@@ -384,11 +386,18 @@ function makeDropdown({ id, groups, onChange }) {
         const i = idx++;
         const nm = h('span', { class: 'dd-name' }, it.name);
         if (it.font) nm.style.fontFamily = `"${it.value}", sans-serif`;
+        const play = speaker ? h('button', {
+          type: 'button', class: 'dd-play', tabindex: '-1', title: 'Hear this voice',
+          'aria-label': `Hear the voice ${it.name}`,
+          onclick: (e) => { e.stopPropagation(); previewVoice(it.value, speaker, e.currentTarget); },
+        }, icon('play', 14)) : null;
+        const chk = icon('check', 16);
+        chk.setAttribute('class', 'dd-check');
         menu.append(h('div', {
           class: 'dd-opt', role: 'option', id: `${id}-opt-${i}`, 'data-i': i, 'aria-selected': 'false',
           onclick: () => { set(flat[i].value); close(true); },
           onmousemove: () => setActive(i, false),
-        }, nm, h('span', { class: 'dd-meta' }, it.meta || ''), icon('check', 16)));
+        }, play, nm, h('span', { class: 'dd-meta' }, it.meta || ''), chk));
       });
     });
   }
@@ -439,6 +448,7 @@ function makeDropdown({ id, groups, onChange }) {
     else if (k === 'Home') { e.preventDefault(); setActive(0); }
     else if (k === 'End') { e.preventDefault(); setActive(flat.length - 1); }
     else if (k === 'Enter' || k === ' ') { e.preventDefault(); set(flat[active].value); close(true); }
+    else if (k === 'ArrowRight' && speaker) { e.preventDefault(); previewVoice(flat[active].value, speaker, $(`#${id}-opt-${active} .dd-play`)); }
     else if (k === 'Escape') { e.preventDefault(); close(true); }
     else if (k === 'Tab') close();
     else if (k.length === 1) {
@@ -456,6 +466,44 @@ function makeDropdown({ id, groups, onChange }) {
   return api;
 }
 
+// ---- hear a voice ----
+const previewState = { audio: null, btn: null };
+
+function setPlayIcon(btn, name) {
+  btn.replaceChildren(icon(name, 14));
+  btn.classList.toggle('loading', name === 'loader');
+  btn.classList.toggle('playing', name === 'stop');
+}
+
+function stopPreview() {
+  if (previewState.audio) {
+    previewState.audio.pause();
+    previewState.audio.onended = null;
+    previewState.audio.onerror = null;
+    previewState.audio = null;
+  }
+  if (previewState.btn) { setPlayIcon(previewState.btn, 'play'); previewState.btn = null; }
+}
+
+function previewVoice(value, speaker, btn) {
+  if (!btn) return;
+  const same = previewState.btn === btn;
+  stopPreview();
+  if (same) return; // second click on the same button stops it
+  previewState.btn = btn;
+  setPlayIcon(btn, 'loader');
+  const audio = new Audio(`/api/voice-preview?voice=${encodeURIComponent(value)}&speaker=${speaker}`);
+  previewState.audio = audio;
+  const fail = () => {
+    if (previewState.audio !== audio) return;
+    stopPreview();
+    toast('Could not play that voice sample. Please try again.', 'error');
+  };
+  audio.onended = () => { if (previewState.audio === audio) stopPreview(); };
+  audio.onerror = fail;
+  audio.play().then(() => { if (previewState.audio === audio) setPlayIcon(btn, 'stop'); }).catch(fail);
+}
+
 document.addEventListener('click', (e) => {
   dropdowns.forEach((d) => { if (!d.contains(e.target)) d.close(); });
 });
@@ -466,8 +514,8 @@ const setRadio = (name, v) => { const r = $(`input[name="${name}"][value="${v}"]
 
 const persist = debounce(() => store.set('settings', JSON.stringify(getSettings())), 250);
 
-const voiceDd = makeDropdown({ id: 'voice', groups: VOICE_GROUPS('Default voice'), onChange: () => persist() });
-const charDd = makeDropdown({ id: 'charVoice', groups: VOICE_GROUPS('Default voice'), onChange: () => persist() });
+const voiceDd = makeDropdown({ id: 'voice', groups: VOICE_GROUPS('Default voice'), speaker: 'narrator', onChange: () => persist() });
+const charDd = makeDropdown({ id: 'charVoice', groups: VOICE_GROUPS('Default voice'), speaker: 'character', onChange: () => persist() });
 const fontDd = makeDropdown({ id: 'capFont', groups: FONT_GROUPS, onChange: () => { syncUI(); persist(); } });
 
 function getSettings() {

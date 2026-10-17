@@ -11,6 +11,7 @@ const { synthesize } = require('./services/tts');
 const { sanitizeOptions } = require('./services/options');
 const { buildCues, buildSceneAss, buildCardAss, toSrt } = require('./services/captions');
 const R = require('./services/render');
+const { getPreviewFile } = require('./services/preview');
 
 const OUTPUT_DIR = path.join(__dirname, 'output');
 const TEMP_DIR = path.join(__dirname, 'temp');
@@ -280,6 +281,19 @@ app.post('/api/videos', wrap(async (req, res) => {
     throw err;
   }
 }));
+
+app.get('/api/voice-preview', async (req, res) => {
+  try {
+    const file = await getPreviewFile(String(req.query.voice || ''), req.query.speaker === 'character' ? 'character' : 'narrator');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.type('audio/mpeg');
+    res.sendFile(file, { dotfiles: 'allow' });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    console.error('Voice sample failed:', err.message);
+    res.status(503).json({ error: 'The voice sample is not available right now. Please try again.' });
+  }
+});
 
 app.get('/api/videos', wrap(async (req, res) => {
   res.json(await Video.find().sort({ createdAt: -1 }).limit(100));
