@@ -1042,15 +1042,15 @@ function renderLibrary() {
   }
 
   rows.forEach((v) => {
-    const isDone = v.status === 'done' && v.videoFile;
+    const isDone = v.status === 'done' && v.videoFile && !v.fileMissing;
     const url = `/output/${v.videoFile}`;
     const thumb = h('div', { class: 'thumb' });
     if (isDone && v.posterFile) thumb.append(h('img', { src: `/output/${v.posterFile}`, alt: '', loading: 'lazy' }));
     else if (isDone) thumb.append(h('video', { src: `${url}#t=0.6`, preload: 'metadata', muted: true, playsinline: true, tabindex: '-1' }));
     else thumb.append(icon('film', 28));
 
-    const label = { done: 'Ready', error: 'Failed', queued: 'In progress', processing: 'In progress' }[v.status] || v.status;
-    const kind = v.status === 'processing' || v.status === 'queued' ? 'working' : v.status;
+    const label = v.fileMissing ? 'Expired' : { done: 'Ready', error: 'Failed', queued: 'In progress', processing: 'In progress' }[v.status] || v.status;
+    const kind = v.fileMissing ? 'error' : v.status === 'processing' || v.status === 'queued' ? 'working' : v.status;
     const opts = v.options || {};
 
     const actions = h('div', { class: 'reel-actions' },

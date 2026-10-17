@@ -12,6 +12,8 @@ const { sanitizeOptions } = require('./services/options');
 const { buildCues, buildSceneAss, buildCardAss, toSrt } = require('./services/captions');
 const R = require('./services/render');
 const { getPreviewFile } = require('./services/preview');
+const { basicAuth, createLimiter } = require('./services/guard');
+const { createQueue } = require('./services/queue');
 
 const OUTPUT_DIR = path.join(__dirname, 'output');
 const TEMP_DIR = path.join(__dirname, 'temp');
@@ -19,9 +21,15 @@ fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 fs.mkdirSync(TEMP_DIR, { recursive: true });
 
 const app = express();
+if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PROXY) || 1); // behind a host's proxy
+app.get('/healthz', (req, res) => res.send('ok')); // for hosting health checks
+app.use(basicAuth(process.env.APP_PASSWORD));
 app.use(express.json({ limit: '30mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/output', express.static(OUTPUT_DIR));
+
+const videoLimiter = createLimiter({ max: parseInt(process.env.MAX_VIDEOS_PER_HOUR || '0', 10), message: 'You have reached the hourly video limit.' });
+const previewLimiter = createLimiter({ max: process.env.MAX_VIDEOS_PER_HOUR ? 60 : 0, message: 'Too many voice samples.' });
 
 const wrap = (fn) => (req, res) =>
   fn(req, res).catch((err) => {
@@ -254,9 +262,26 @@ async function processJob(id) {
   }
 }
 
+// Videos are made one at a time by default (set MAX_PARALLEL_JOBS to allow more).
+const jobs = createQueue({
+  max: Math.max(1, parseInt(process.env.MAX_PARALLEL_JOBS || '1', 10)),
+  run: processJob,
+  onPosition: (id, ahead) => Video.findByIdAndUpdate(id, {
+    status: 'queued',
+    progress: ahead <= 1 ? 'Waiting for another video to finish...' : `Waiting in line, ${ahead} videos ahead...`,
+  }).catch(() => {}),
+});
+
+// Tells the browser when a finished video's file is gone (free hosts erase files on restart).
+function withFileState(doc) {
+  const v = doc.toObject ? doc.toObject() : doc;
+  v.fileMissing = v.status === 'done' && !!v.videoFile && !fs.existsSync(path.join(OUTPUT_DIR, v.videoFile));
+  return v;
+}
+
 // ---- API ----
 
-app.post('/api/videos', wrap(async (req, res) => {
+app.post('/api/videos', videoLimiter, wrap(async (req, res) => {
   try {
     const script = (req.body.script || '').trim();
     if (!script) return res.status(400).json({ error: 'Script is required' });
@@ -274,7 +299,7 @@ app.post('/api/videos', wrap(async (req, res) => {
     if (logo) fs.writeFileSync(path.join(dir, 'wm.img'), logo);
     if (music) fs.writeFileSync(path.join(dir, 'music.bin'), music);
 
-    processJob(video._id); // runs in the background; the client polls for status
+    jobs.add(String(video._id)); // runs in the background; the client polls for status
     res.status(202).json({ id: video._id });
   } catch (err) {
     if (err.status === 400) return res.status(400).json({ error: err.message });
@@ -282,7 +307,7 @@ app.post('/api/videos', wrap(async (req, res) => {
   }
 }));
 
-app.get('/api/voice-preview', async (req, res) => {
+app.get('/api/voice-preview', previewLimiter, async (req, res) => {
   try {
     const file = await getPreviewFile(String(req.query.voice || ''), req.query.speaker === 'character' ? 'character' : 'narrator');
     res.set('Cache-Control', 'public, max-age=86400');
@@ -296,14 +321,14 @@ app.get('/api/voice-preview', async (req, res) => {
 });
 
 app.get('/api/videos', wrap(async (req, res) => {
-  res.json(await Video.find().sort({ createdAt: -1 }).limit(100));
+  res.json((await Video.find().sort({ createdAt: -1 }).limit(100)).map(withFileState));
 }));
 
 app.get('/api/videos/:id', wrap(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: 'Not found' });
   const video = await Video.findById(req.params.id);
   if (!video) return res.status(404).json({ error: 'Not found' });
-  res.json(video);
+  res.json(withFileState(video));
 }));
 
 app.delete('/api/videos/:id', wrap(async (req, res) => {
@@ -324,6 +349,8 @@ app.delete('/api/videos', wrap(async (req, res) => {
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
+    // Jobs that were running when the server last stopped can never finish.
+    Video.updateMany({ status: { $in: ['queued', 'processing'] } }, { status: 'error', progress: 'Failed', error: 'Interrupted by a server restart' }).catch(() => {});
     const port = process.env.PORT || 3000;
     app.listen(port, () => { console.log(`Running at http://localhost:${port}`); R.checkTools(); });
   })

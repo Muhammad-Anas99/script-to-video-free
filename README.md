@@ -27,6 +27,9 @@ Open http://localhost:3000
 - **Library:** search, filter, watch, download, reuse a script with all its settings, delete one or all.
 - Light and dark mode. Quick start presets for YouTube, Shorts/Reels/TikTok, Cinematic and Clean.
 
+## Putting it online
+See `DEPLOY.md` for free hosting options, a `Dockerfile`, and what to set before the site is public (`APP_PASSWORD`, `MAX_VIDEOS_PER_HOUR`). Videos are made one at a time by default.
+
 ## Files
 - `server.js` API and the video pipeline
 - `models/Video.js` MongoDB model
