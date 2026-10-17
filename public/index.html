@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="author" content="Anas Khalid" />
+  <title>ScriptReel</title>
+  <script>
+    // Set the theme before first paint to avoid a flash.
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('theme'); } catch (e) {}
+      var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="nav">
+  <a class="brand" href="#create" aria-label="ScriptReel home">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="2" y="9" width="28" height="19" rx="3" style="fill:currentColor"/>
+      <path d="M3 4.5l25 -1.5 1.2 5.5 -25 1.5z" style="fill:var(--amber)"/>
+      <path d="M9 3.8l3.2 5.2M16 3.4l3.2 5.2M23 3l3.2 5.2" style="stroke:var(--surface)" stroke-width="2"/>
+      <path d="M13 15.5v8l7-4z" style="fill:var(--surface)"/>
+    </svg>
+    <span class="brand-name">ScriptReel</span>
+  </a>
+
+  <nav class="tabs" aria-label="Sections">
+    <a href="#create" data-tab="create">Create</a>
+    <a href="#library" data-tab="library">Library <span class="pill" id="libCount" hidden>0</span></a>
+    <a href="#guide" data-tab="guide">Guide</a>
+  </nav>
+
+  <div class="nav-actions">
+    <button class="btn ghost sm" id="newBtn" type="button"><span data-icon="plus" data-size="16"></span>New script</button>
+    <button class="icon-btn" id="themeBtn" type="button" aria-label="Switch between light and dark mode" title="Switch theme">
+      <span class="ico-sun" data-icon="sun"></span>
+      <span class="ico-moon" data-icon="moon"></span>
+    </button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ============ CREATE ============ -->
+  <section id="view-create" class="view" aria-labelledby="h-create">
+    <div class="page-head">
+      <h1 id="h-create">New video</h1>
+      <p>Paste any text, choose how it looks and sounds, and get a finished video with voiceover, matching footage and captions.</p>
+    </div>
+
+    <div class="studio">
+      <div class="left">
+
+        <div class="panel editor">
+          <div class="panel-bar">
+            <h2>Your script</h2>
+            <div class="bar-actions">
+              <button class="btn ghost sm" id="btnSample" type="button"><span data-icon="shuffle" data-size="16"></span>Sample</button>
+              <button class="btn ghost sm" id="btnPaste" type="button"><span data-icon="clipboard" data-size="16"></span>Paste</button>
+              <button class="btn ghost sm" id="btnOpenFile" type="button"><span data-icon="upload" data-size="16"></span>Open file</button>
+              <button class="btn ghost sm" id="btnClear" type="button"><span data-icon="x" data-size="16"></span>Clear</button>
+              <input type="file" id="scriptFile" accept=".txt,.md,text/plain" hidden />
+            </div>
+          </div>
+
+          <textarea id="script" spellcheck="true" aria-label="Video script"
+            placeholder="Paste anything here: a finished script, an article, a story, or a few notes.&#10;&#10;ScriptReel splits it into scenes and finds matching footage by itself."></textarea>
+
+          <div class="editor-foot">
+            <span class="count" id="count">0 words</span>
+            <a class="link" href="#guide">How to write a script</a>
+          </div>
+        </div>
+
+        <div class="panel settings">
+          <div class="quick">
+            <span class="field-label">Quick start</span>
+            <div class="chips">
+              <button class="chip" type="button" data-preset="youtube">YouTube video</button>
+              <button class="chip" type="button" data-preset="shorts">Shorts, Reels, TikTok</button>
+              <button class="chip" type="button" data-preset="cinematic">Cinematic story</button>
+              <button class="chip" type="button" data-preset="clean">Clean, no captions</button>
+            </div>
+          </div>
+
+          <div class="tabbar" role="tablist" aria-label="Video settings">
+            <button type="button" role="tab" id="tab-voice" aria-controls="pane-voice" aria-selected="true" data-pane="voice">Voice</button>
+            <button type="button" role="tab" id="tab-captions" aria-controls="pane-captions" aria-selected="false" data-pane="captions" tabindex="-1">Captions</button>
+            <button type="button" role="tab" id="tab-footage" aria-controls="pane-footage" aria-selected="false" data-pane="footage" tabindex="-1">Footage</button>
+            <button type="button" role="tab" id="tab-brand" aria-controls="pane-brand" aria-selected="false" data-pane="brand" tabindex="-1">Brand</button>
+            <button type="button" role="tab" id="tab-output" aria-controls="pane-output" aria-selected="false" data-pane="output" tabindex="-1">Output</button>
+          </div>
+
+          <!-- Voice -->
+          <div class="pane" id="pane-voice" role="tabpanel" aria-labelledby="tab-voice">
+            <div class="fields">
+              <div class="field">
+                <span class="field-label" id="voiceLabel">Narrator voice</span>
+                <div class="dd" id="voiceDd">
+                  <input type="hidden" id="voice" value="" />
+                  <button type="button" class="dd-btn" id="voiceBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="voiceLabel voiceName">
+                    <span class="dd-val"><span class="dd-name" id="voiceName">Default voice</span><span class="dd-meta" id="voiceMeta"></span></span>
+                    <span class="dd-chev" data-icon="chevron" data-size="18"></span>
+                  </button>
+                  <div class="dd-menu" id="voiceMenu" role="listbox" tabindex="-1" aria-labelledby="voiceLabel" hidden></div>
+                </div>
+              </div>
+
+              <div class="field">
+                <span class="field-label" id="charVoiceLabel">Character voice <small>(for lines spoken by a character)</small></span>
+                <div class="dd" id="charVoiceDd">
+                  <input type="hidden" id="charVoice" value="" />
+                  <button type="button" class="dd-btn" id="charVoiceBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="charVoiceLabel charVoiceName">
+                    <span class="dd-val"><span class="dd-name" id="charVoiceName">Default voice</span><span class="dd-meta" id="charVoiceMeta"></span></span>
+                    <span class="dd-chev" data-icon="chevron" data-size="18"></span>
+                  </button>
+                  <div class="dd-menu" id="charVoiceMenu" role="listbox" tabindex="-1" aria-labelledby="charVoiceLabel" hidden></div>
+                </div>
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="rate">Speaking speed <output id="rateVal" for="rate">Normal</output></label>
+                <input type="range" id="rate" min="-25" max="35" step="5" value="0" />
+              </div>
+
+              <div class="field">
+                <span class="field-label">Background music <small>(optional, MP3 or WAV up to 15 MB)</small></span>
+                <div class="file-row">
+                  <button class="btn ghost sm" id="musicPick" type="button"><span data-icon="music" data-size="16"></span>Choose music</button>
+                  <span class="file-name" id="musicName">No file chosen</span>
+                  <button class="btn ghost sm" id="musicClear" type="button" hidden><span data-icon="x" data-size="16"></span>Remove</button>
+                  <input type="file" id="musicFile" accept="audio/*" hidden />
+                </div>
+                <div id="musicVolWrap" hidden>
+                  <label class="field-label" for="musicVol">Music volume <output id="musicVolVal" for="musicVol">18%</output></label>
+                  <input type="range" id="musicVol" min="5" max="60" step="1" value="18" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Captions -->
+          <div class="pane" id="pane-captions" role="tabpanel" aria-labelledby="tab-captions" hidden>
+            <div class="fields">
+              <label class="switch">
+                <input type="checkbox" id="capOn" checked />
+                <span class="track" aria-hidden="true"></span>
+                <span class="switch-label">Show captions in the video</span>
+              </label>
+
+              <div class="cap-fields" id="capFields">
+                <div class="cap-preview" id="capPreview" data-pos="bottom" data-size="m" aria-hidden="true">
+                  <span class="cap-text" id="capText">Every great day starts</span>
+                </div>
+
+                <div class="fields">
+                  <div class="field">
+                    <span class="field-label">Style</span>
+                    <div class="chips">
+                      <button class="chip" type="button" data-capstyle="classic">Classic</button>
+                      <button class="chip" type="button" data-capstyle="bold">Bold pop</button>
+                      <button class="chip" type="button" data-capstyle="boxed">Boxed</button>
+                      <button class="chip" type="button" data-capstyle="soft">Soft</button>
+                      <button class="chip" type="button" data-capstyle="neon">Neon</button>
+                    </div>
+                  </div>
+
+                  <div class="row2">
+                    <fieldset class="field seg">
+                      <legend class="field-label">Position</legend>
+                      <div class="seg-row" style="--n:3">
+                        <label><input type="radio" name="capPos" value="top" /><span>Top</span></label>
+                        <label><input type="radio" name="capPos" value="middle" /><span>Middle</span></label>
+                        <label><input type="radio" name="capPos" value="bottom" checked /><span>Bottom</span></label>
+                      </div>
+                    </fieldset>
+                    <fieldset class="field seg">
+                      <legend class="field-label">Size</legend>
+                      <div class="seg-row" style="--n:3">
+                        <label><input type="radio" name="capSize" value="s" /><span>Small</span></label>
+                        <label><input type="radio" name="capSize" value="m" checked /><span>Medium</span></label>
+                        <label><input type="radio" name="capSize" value="l" /><span>Large</span></label>
+                      </div>
+                    </fieldset>
+                  </div>
+
+                  <div class="row2">
+                    <fieldset class="field seg">
+                      <legend class="field-label">Words at a time</legend>
+                      <div class="seg-row" style="--n:3">
+                        <label><input type="radio" name="capWords" value="2" /><span>1 to 2</span></label>
+                        <label><input type="radio" name="capWords" value="4" checked /><span>3 to 4</span></label>
+                        <label><input type="radio" name="capWords" value="8" /><span>Full line</span></label>
+                      </div>
+                    </fieldset>
+                    <fieldset class="field seg">
+                      <legend class="field-label">Animation</legend>
+                      <div class="seg-row" style="--n:3">
+                        <label><input type="radio" name="capAnim" value="none" checked /><span>None</span></label>
+                        <label><input type="radio" name="capAnim" value="fade" /><span>Fade</span></label>
+                        <label><input type="radio" name="capAnim" value="pop" /><span>Pop</span></label>
+                      </div>
+                    </fieldset>
+                  </div>
+
+                  <div class="field">
+                    <span class="field-label" id="capFontLabel">Font</span>
+                    <div class="dd" id="capFontDd">
+                      <input type="hidden" id="capFont" value="Arial" />
+                      <button type="button" class="dd-btn" id="capFontBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="capFontLabel capFontName">
+                        <span class="dd-val"><span class="dd-name" id="capFontName">Arial</span><span class="dd-meta" id="capFontMeta"></span></span>
+                        <span class="dd-chev" data-icon="chevron" data-size="18"></span>
+                      </button>
+                      <div class="dd-menu" id="capFontMenu" role="listbox" tabindex="-1" aria-labelledby="capFontLabel" hidden></div>
+                    </div>
+                  </div>
+
+                  <div class="row2">
+                    <label class="field color-field"><span class="field-label">Text colour</span><input type="color" id="capColor" value="#ffffff" /></label>
+                    <label class="field color-field"><span class="field-label">Outline or box colour</span><input type="color" id="capOutline" value="#000000" /></label>
+                  </div>
+
+                  <div class="row2">
+                    <label class="switch"><input type="checkbox" id="capBox" /><span class="track" aria-hidden="true"></span><span class="switch-label">Background box</span></label>
+                    <label class="switch"><input type="checkbox" id="capUpper" /><span class="track" aria-hidden="true"></span><span class="switch-label">UPPERCASE</span></label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footage -->
+          <div class="pane" id="pane-footage" role="tabpanel" aria-labelledby="tab-footage" hidden>
+            <div class="fields">
+              <fieldset class="field seg">
+                <legend class="field-label">Footage source</legend>
+                <div class="seg-row">
+                  <label><input type="radio" name="source" value="mixed" checked /><span>Videos and photos</span></label>
+                  <label><input type="radio" name="source" value="video" /><span>Videos only</span></label>
+                </div>
+                <p class="help">Photos fill in when no good video clip exists. They slowly zoom so they feel alive.</p>
+              </fieldset>
+
+              <fieldset class="field seg">
+                <legend class="field-label">Cutting speed</legend>
+                <div class="seg-row" style="--n:3">
+                  <label><input type="radio" name="cut" value="3" /><span>Fast</span></label>
+                  <label><input type="radio" name="cut" value="5" checked /><span>Normal</span></label>
+                  <label><input type="radio" name="cut" value="8" /><span>Slow</span></label>
+                </div>
+                <p class="help">Long scenes are cut into several shots. Fast changes shot about every 3 seconds.</p>
+              </fieldset>
+
+              <fieldset class="field pills">
+                <legend class="field-label">Colour look</legend>
+                <div class="pill-row">
+                  <label><input type="radio" name="look" value="natural" checked /><span>Natural</span></label>
+                  <label><input type="radio" name="look" value="warm" /><span>Warm</span></label>
+                  <label><input type="radio" name="look" value="cool" /><span>Cool</span></label>
+                  <label><input type="radio" name="look" value="cinematic" /><span>Cinematic</span></label>
+                  <label><input type="radio" name="look" value="mono" /><span>Black and white</span></label>
+                </div>
+              </fieldset>
+
+              <fieldset class="field seg">
+                <legend class="field-label">Between scenes</legend>
+                <div class="seg-row">
+                  <label><input type="radio" name="transition" value="fade" checked /><span>Soft fade</span></label>
+                  <label><input type="radio" name="transition" value="none" /><span>Straight cut</span></label>
+                </div>
+              </fieldset>
+            </div>
+          </div>
+
+          <!-- Brand -->
+          <div class="pane" id="pane-brand" role="tabpanel" aria-labelledby="tab-brand" hidden>
+            <div class="fields">
+              <fieldset class="field seg">
+                <legend class="field-label">Watermark</legend>
+                <div class="seg-row" style="--n:3">
+                  <label><input type="radio" name="wmType" value="none" checked /><span>None</span></label>
+                  <label><input type="radio" name="wmType" value="text" /><span>Text</span></label>
+                  <label><input type="radio" name="wmType" value="image" /><span>Logo</span></label>
+                </div>
+              </fieldset>
+
+              <div class="fields" id="wmTextWrap" hidden>
+                <label class="field"><span class="field-label">Watermark text</span>
+                  <input class="input" type="text" id="wmText" maxlength="60" placeholder="@yourchannel" /></label>
+              </div>
+
+              <div class="field" id="wmLogoWrap" hidden>
+                <span class="field-label">Logo image <small>(PNG with a clear background works best)</small></span>
+                <div class="file-row">
+                  <button class="btn ghost sm" id="wmPick" type="button"><span data-icon="image" data-size="16"></span>Choose logo</button>
+                  <img class="logo-prev" id="wmPreview" alt="Logo preview" hidden />
+                  <span class="file-name" id="wmName">No file chosen</span>
+                  <button class="btn ghost sm" id="wmClear" type="button" hidden><span data-icon="x" data-size="16"></span>Remove</button>
+                  <input type="file" id="wmFile" accept="image/png,image/jpeg,image/webp" hidden />
+                </div>
+              </div>
+
+              <div class="fields" id="wmOptions" hidden>
+                <fieldset class="field pills">
+                  <legend class="field-label">Position</legend>
+                  <div class="pill-row">
+                    <label><input type="radio" name="wmPos" value="tl" /><span>Top left</span></label>
+                    <label><input type="radio" name="wmPos" value="tr" /><span>Top right</span></label>
+                    <label><input type="radio" name="wmPos" value="bl" /><span>Bottom left</span></label>
+                    <label><input type="radio" name="wmPos" value="br" checked /><span>Bottom right</span></label>
+                    <label><input type="radio" name="wmPos" value="center" /><span>Centre</span></label>
+                  </div>
+                </fieldset>
+                <div class="row2">
+                  <div class="field">
+                    <label class="field-label" for="wmSize">Size <output id="wmSizeVal" for="wmSize">15%</output></label>
+                    <input type="range" id="wmSize" min="5" max="40" step="1" value="15" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="wmOpacity">Opacity <output id="wmOpacityVal" for="wmOpacity">70%</output></label>
+                    <input type="range" id="wmOpacity" min="20" max="100" step="5" value="70" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="fields">
+                <label class="field"><span class="field-label">Title card at the start <small>(optional)</small></span>
+                  <input class="input" type="text" id="introTitle" maxlength="80" placeholder="My video title" /></label>
+                <label class="field"><span class="field-label">Title card subtitle <small>(optional)</small></span>
+                  <input class="input" type="text" id="introSub" maxlength="100" placeholder="A short line under the title" /></label>
+                <label class="field"><span class="field-label">Closing card at the end <small>(optional)</small></span>
+                  <input class="input" type="text" id="outroText" maxlength="100" placeholder="Thanks for watching" /></label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Output -->
+          <div class="pane" id="pane-output" role="tabpanel" aria-labelledby="tab-output" hidden>
+            <div class="fields">
+              <fieldset class="field seg">
+                <legend class="field-label">Shape</legend>
+                <div class="seg-row">
+                  <label><input type="radio" name="format" value="landscape" checked /><span>16:9 Landscape</span></label>
+                  <label><input type="radio" name="format" value="portrait" /><span>9:16 Vertical</span></label>
+                </div>
+                <p class="help">Landscape suits YouTube and computers. Vertical suits Shorts, Reels and TikTok.</p>
+              </fieldset>
+              <fieldset class="field seg">
+                <legend class="field-label">Quality</legend>
+                <div class="seg-row">
+                  <label><input type="radio" name="quality" value="720" checked /><span>HD 720p</span></label>
+                  <label><input type="radio" name="quality" value="1080" /><span>Full HD 1080p</span></label>
+                </div>
+                <p class="help">Full HD looks sharper but takes longer to make and download.</p>
+              </fieldset>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn primary lg" id="go" type="button">
+          <span data-icon="film" data-size="20"></span>
+          <span id="goLabel">Generate video</span>
+          <span class="hint">Ctrl + Enter</span>
+        </button>
+      </div>
+
+      <div class="stage">
+        <div class="sticky-group">
+        <div class="panel monitor-panel">
+          <div class="monitor" id="monitor" data-format="landscape">
+            <div class="idle" id="idle">
+              <span data-icon="film" data-size="40"></span>
+              <p>Your video appears here when it is ready.</p>
+            </div>
+            <video id="player" controls hidden playsinline></video>
+            <span class="rec" id="rec" hidden>Rendering</span>
+          </div>
+
+          <div class="result-bar" id="resultBar" hidden>
+            <a class="btn primary sm" id="btnDownload" href="#" download><span data-icon="download" data-size="16"></span>Download MP4</a>
+            <a class="btn ghost sm" id="btnSrt" href="#" download hidden><span data-icon="file" data-size="16"></span>Captions file</a>
+            <a class="btn ghost sm" id="btnOpen" href="#" target="_blank" rel="noopener"><span data-icon="external" data-size="16"></span>Open in new tab</a>
+            <button class="btn ghost sm" id="btnCopyScript" type="button"><span data-icon="copy" data-size="16"></span>Copy script</button>
+            <button class="btn danger sm" id="btnDeleteCurrent" type="button"><span data-icon="trash" data-size="16"></span>Delete</button>
+          </div>
+        </div>
+
+        <div class="panel progress-panel">
+          <ol class="steps" id="steps" aria-label="Progress">
+            <li data-step="analyze">Read script</li>
+            <li data-step="scenes">Build scenes</li>
+            <li data-step="join">Finish</li>
+            <li data-step="done">Ready</li>
+          </ol>
+          <p class="status" id="status" role="status">Waiting for a script.</p>
+          <ul class="notes" id="warnings" hidden></ul>
+
+          <div class="timeline" id="timeline" role="list" aria-label="Scene timeline">
+            <p class="timeline-empty">Scenes appear here as a timeline once your script is read.</p>
+          </div>
+
+        </div>
+        </div>
+
+        <details class="breakdown panel" id="breakdown" hidden>
+          <summary>Scene breakdown</summary>
+          <ol id="sceneList"></ol>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LIBRARY ============ -->
+  <section id="view-library" class="view" aria-labelledby="h-library" hidden>
+    <div class="page-head split">
+      <div>
+        <h1 id="h-library">Library</h1>
+        <p id="libStats">Loading...</p>
+      </div>
+      <div class="bar-actions">
+        <button class="btn primary sm" id="libNew" type="button"><span data-icon="plus" data-size="16"></span>New video</button>
+        <button class="btn ghost sm" id="libRefresh" type="button"><span data-icon="reuse" data-size="16"></span>Refresh</button>
+        <button class="btn danger sm" id="libClear" type="button"><span data-icon="trash" data-size="16"></span>Delete all</button>
+      </div>
+    </div>
+
+    <div class="lib-tools">
+      <label class="search">
+        <span data-icon="search" data-size="18"></span>
+        <input id="libSearch" type="search" placeholder="Search your scripts" aria-label="Search scripts" />
+      </label>
+      <div class="chips" role="group" aria-label="Filter by status">
+        <button class="chip on" data-filter="all" type="button">All</button>
+        <button class="chip" data-filter="done" type="button">Ready</button>
+        <button class="chip" data-filter="working" type="button">In progress</button>
+        <button class="chip" data-filter="error" type="button">Failed</button>
+      </div>
+    </div>
+
+    <ul class="reels" id="reels"></ul>
+  </section>
+
+  <!-- ============ GUIDE ============ -->
+  <section id="view-guide" class="view" aria-labelledby="h-guide" hidden>
+    <div class="page-head">
+      <h1 id="h-guide">How it works</h1>
+      <p>You can start in under a minute. The rest of this page is optional.</p>
+    </div>
+
+    <div class="guide">
+      <section class="guide-block">
+        <h2>Make your first video</h2>
+        <ol class="steps-big">
+          <li>
+            <h3>Write or paste your text</h3>
+            <p>Anything works: a full script, a blog post, a story, or a few sentences. You do not need to format it.</p>
+          </li>
+          <li>
+            <h3>Choose how it looks and sounds</h3>
+            <p>Pick a voice, turn captions on or off, and choose landscape or vertical. In a hurry? Press one of the <strong>Quick start</strong> buttons.</p>
+          </li>
+          <li>
+            <h3>Press Generate video</h3>
+            <p>It usually takes one to three minutes. When it is ready you can watch it, download it or delete it.</p>
+          </li>
+        </ol>
+        <p><a class="btn primary" href="#create">Go to Create</a></p>
+      </section>
+
+      <section class="guide-block">
+        <h2>Want more control? Write it as scenes</h2>
+        <p>This is optional. If you add a few labelled lines, the video follows your plan exactly.</p>
+        <div class="table-wrap">
+          <table class="ref">
+            <thead><tr><th>Write this</th><th>What it does</th></tr></thead>
+            <tbody>
+              <tr><td><code>Narrator:</code> Every dog has a dream.</td><td>The voice reads these words aloud.</td></tr>
+              <tr><td><code>Visual:</code> A dog on a trampoline</td><td>Describes what should be on screen.</td></tr>
+              <tr><td><code>Keywords:</code> dog, trampoline</td><td>Search words used to find footage.</td></tr>
+              <tr><td><code>Style:</code> cartoon</td><td>Looks for animated clips first. Leave it out for real footage.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Start each new scene with a line like <code>Scene 2</code>. Here is a full example you can try:</p>
+        <pre class="example" id="exampleText"></pre>
+        <p><button class="btn ghost" id="btnUseExample" type="button"><span data-icon="wand" data-size="16"></span>Put this example in the editor</button></p>
+      </section>
+
+      <section class="guide-block">
+        <h2>Let ChatGPT write the script for you</h2>
+        <p>Copy the prompt below, paste it into ChatGPT, and replace <strong>[YOUR TOPIC HERE]</strong> with your idea. Then paste its answer into the editor.</p>
+        <p><button class="btn primary" id="btnCopyPrompt" type="button"><span data-icon="copy" data-size="16"></span>Copy the prompt</button></p>
+        <details class="prompt-box">
+          <summary>Show the prompt</summary>
+          <pre class="prompt" id="promptText"></pre>
+        </details>
+      </section>
+
+      <section class="guide-block">
+        <h2>Tips for better videos</h2>
+        <ul class="plain">
+          <li>Describe things a camera can film, like "a dog running in a garden". Ideas like "success" are harder to show.</li>
+          <li>One idea per scene works best. Short sentences make cleaner captions.</li>
+          <li>Try two or three scenes first to see if you like the footage, then make the full video.</li>
+          <li>Longer scripts take longer to make. A 60 to 90 second video is a good size.</li>
+          <li>You can change the voice, captions or look and generate again. Your earlier videos stay in the Library.</li>
+        </ul>
+      </section>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>&copy; <span id="year">2026</span> <strong>Anas Khalid</strong>. All rights reserved.</span>
+</footer>
+
+<dialog id="confirm" class="dialog" aria-labelledby="confirmTitle">
+  <form method="dialog">
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <p id="confirmText"></p>
+    <div class="dialog-actions">
+      <button class="btn ghost" value="cancel" type="submit">Cancel</button>
+      <button class="btn danger" value="ok" id="confirmOk" type="submit">Delete</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
