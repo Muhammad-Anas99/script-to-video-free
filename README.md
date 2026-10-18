@@ -30,6 +30,16 @@ Open http://localhost:3000
 - Light and dark mode, five accent colours, saved settings of your own, recent videos on the Create page, and a library with totals, sorting and a grid view.
 - Light and dark mode. Quick start presets for YouTube, Shorts/Reels/TikTok, Cinematic and Clean.
 
+## Accounts and privacy
+- The first time someone opens the site, a sign-in card appears over a blurred page (create an account or sign in). After that the person stays signed in for up to 90 days, with no card. Their profile picture shows in the top bar, with a menu to change it, read the Privacy Policy, sign out or delete the account.
+- Each person only sees their own scripts and videos. Video files are protected the same way.
+- Passwords are stored as salted scrypt hashes. Sessions use a signed, HTTP-only cookie.
+- The first account created adopts any videos made before accounts existed.
+- Emails are not verified and there is no password reset (no email service is connected). People who forget a password can use Google sign-in if you set it up.
+- **Google sign-in (optional):** in Google Cloud Console create an OAuth client ID of type Web application, add your site address (for example `http://localhost:3000` and your public address) under Authorized JavaScript origins, then put the client ID in `.env` as `GOOGLE_CLIENT_ID`.
+- Set `CONTACT_EMAIL` in `.env` so the Privacy Policy shows how to reach you.
+- The Privacy Policy (page `#privacy`) describes exactly what this app does. If you change hosting, add analytics or connect other services, update it.
+
 ## Putting it online
 See `DEPLOY.md` for free hosting options, a `Dockerfile`, and what to set before the site is public (`APP_PASSWORD`, `MAX_VIDEOS_PER_HOUR`). Videos are made one at a time by default.
 
