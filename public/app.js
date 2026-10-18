@@ -109,6 +109,7 @@ async function api(method, url, body) {
   let data = null;
   try { data = await res.json(); } catch (e) {}
   if (!res.ok) {
+    if (res.status === 401 && !url.startsWith('/api/auth/')) handleSignedOut();
     const err = new Error((data && data.error) || `Request failed (${res.status})`);
     err.status = res.status;
     throw err;
@@ -371,6 +372,7 @@ const FONT_GROUPS = [{
 const state = {
   current: null, activeId: null, busy: false,
   lib: [], filter: 'all', query: '', libTimer: null,
+  user: null, config: {}, signupAvatar: null, googleLoading: false,
   logoData: null, musicData: null, view: store.get('libView') || 'list', sort: store.get('libSort') || 'new',
   sampleQueue: [], lastSample: -1,
 };
@@ -389,7 +391,7 @@ $('#themeBtn').addEventListener('click', () => {
   store.set('theme', next);
 });
 
-const TABS = ['create', 'library', 'guide'];
+const TABS = ['create', 'library', 'guide', 'privacy'];
 
 function route() {
   let tab = location.hash.replace('#', '');
@@ -400,7 +402,7 @@ function route() {
     a.classList.toggle('on', on);
     if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
-  if (tab === 'library') loadLibrary();
+  if (tab === 'library' && state.user) loadLibrary();
   clearTimeout(state.libTimer);
   window.scrollTo(0, 0);
 }
@@ -1586,6 +1588,339 @@ $('#studioGo').addEventListener('click', () => {
   generate({ style: studio.style, scenes });
 });
 
+// ---------- Accounts ----------
+function initialsOf(name) {
+  const parts = String(name || '?').trim().split(/\s+/).filter(Boolean);
+  return ((parts[0] || '?')[0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
+function colorFor(text) {
+  let n = 0;
+  for (const ch of String(text)) n = (n * 31 + ch.charCodeAt(0)) >>> 0;
+  return `hsl(${n % 360} 55% 42%)`;
+}
+
+function avatarEl(user, extra = '') {
+  if (user && user.avatar) {
+    return h('img', { class: `avatar ${extra}`.trim(), src: user.avatar, alt: '', referrerpolicy: 'no-referrer' });
+  }
+  const s = h('span', { class: `avatar initials ${extra}`.trim() }, initialsOf(user && (user.name || user.email)));
+  s.style.background = colorFor((user && (user.email || user.name)) || '?');
+  return s;
+}
+
+function closeAccountMenu() {
+  $('#accountMenu').hidden = true;
+  $('#accountBtn').setAttribute('aria-expanded', 'false');
+}
+
+function renderAccount() {
+  const u = state.user;
+  $('#acctWrap').hidden = !u;
+  if (!u) { closeAccountMenu(); return; }
+  $('#accountBtn').replaceChildren(avatarEl(u));
+  $('#accountBtn').setAttribute('aria-label', `Your account, ${u.name}`);
+  $('#acctAvatarBig').replaceChildren(avatarEl(u, 'big'));
+  $('#acctName').textContent = u.name;
+  $('#acctEmail').textContent = u.email;
+  $('#acctRemove').hidden = !u.avatar;
+  $('#acctChange').textContent = u.avatar ? 'Change profile photo' : 'Add a profile photo';
+}
+
+$('#accountBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const menu = $('#accountMenu');
+  menu.hidden = !menu.hidden;
+  $('#accountBtn').setAttribute('aria-expanded', String(!menu.hidden));
+});
+document.addEventListener('click', (e) => { if (!$('#accountMenu').hidden && !e.target.closest('.acct-wrap')) closeAccountMenu(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#accountMenu').hidden) { closeAccountMenu(); $('#accountBtn').focus(); } });
+
+// pictures are cropped to a small square in the browser before they are uploaded
+function fileToAvatar(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const size = 160;
+      const c = document.createElement('canvas');
+      c.width = size; c.height = size;
+      const side = Math.min(img.width, img.height);
+      c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That image could not be read.')); };
+    img.src = url;
+  });
+}
+
+$('#acctChange').addEventListener('click', () => { closeAccountMenu(); $('#acctFile').click(); });
+$('#acctFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    const { user } = await api('POST', '/api/auth/avatar', { avatar: await fileToAvatar(f) });
+    state.user = user;
+    renderAccount();
+    toast('Profile photo updated');
+  } catch (err) { toast(err.message, 'error'); }
+});
+$('#acctRemove').addEventListener('click', async () => {
+  closeAccountMenu();
+  try {
+    const { user } = await api('POST', '/api/auth/avatar', { avatar: null });
+    state.user = user;
+    renderAccount();
+    toast('Profile photo removed');
+  } catch (err) { toast(err.message, 'error'); }
+});
+$('#acctPrivacy').addEventListener('click', () => { closeAccountMenu(); go('privacy'); });
+$('#acctSignout').addEventListener('click', () => { closeAccountMenu(); signOut(); });
+
+// ---------- Sign in / create account card ----------
+function gateError(msg) {
+  const e = $('#gateError');
+  e.textContent = msg || '';
+  e.hidden = !msg;
+}
+
+function setGateTab(which) {
+  const signin = which === 'signin';
+  $('#gtSignin').setAttribute('aria-selected', String(signin));
+  $('#gtSignup').setAttribute('aria-selected', String(!signin));
+  $('#signinForm').hidden = !signin;
+  $('#signupForm').hidden = signin;
+  $('#gateTitle').textContent = signin ? 'Welcome back' : 'Create your account';
+  $('#gateSub').textContent = signin
+    ? 'Sign in to continue to your private library.'
+    : 'It takes a few seconds. Your scripts and videos stay private to you.';
+  gateError('');
+}
+
+function showGate(message) {
+  document.body.classList.add('gated');
+  const d = $('#gate');
+  const returning = !!store.get('hasAccount');
+  setGateTab(returning ? 'signin' : 'signup');
+  if (message) gateError(message);
+  if (!d.open && d.showModal) d.showModal();
+  loadGoogle();
+  setTimeout(() => { const f = $(returning ? '#siEmail' : '#suName'); if (f) f.focus(); }, 60);
+}
+
+// the card cannot be closed without signing in
+$('#gate').addEventListener('cancel', (e) => e.preventDefault());
+$('#gtSignin').addEventListener('click', () => setGateTab('signin'));
+$('#gtSignup').addEventListener('click', () => setGateTab('signup'));
+['#signinForm', '#signupForm'].forEach((s) => $(s).addEventListener('input', () => gateError('')));
+$('#siShow').addEventListener('change', (e) => { $('#siPass').type = e.target.checked ? 'text' : 'password'; });
+$('#suShow').addEventListener('change', (e) => { $('#suPass').type = e.target.checked ? 'text' : 'password'; });
+
+function handleSignedOut() {
+  if (!state.user && $('#gate').open) return;
+  state.user = null;
+  renderAccount();
+  showGate('Your session ended. Please sign in again.');
+}
+
+async function submitAuth(btn, busyText, idleText, request) {
+  btn.disabled = true;
+  btn.textContent = busyText;
+  gateError('');
+  try {
+    const { user } = await request();
+    onSignedIn(user, true);
+  } catch (e) {
+    gateError(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = idleText;
+  }
+}
+
+$('#signinForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const email = $('#siEmail').value.trim();
+  const password = $('#siPass').value;
+  if (!email || !password) { gateError('Enter your email and password.'); return; }
+  submitAuth($('#siGo'), 'Signing in...', 'Sign in', () => api('POST', '/api/auth/login', { email, password }));
+});
+
+$('#signupForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = $('#suName').value.trim();
+  const email = $('#suEmail').value.trim();
+  const password = $('#suPass').value;
+  if (!name) { gateError('Please enter your name.'); $('#suName').focus(); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { gateError('Please enter a valid email address.'); $('#suEmail').focus(); return; }
+  if (password.length < 8) { gateError('Your password needs at least 8 characters.'); $('#suPass').focus(); return; }
+  if (!$('#suAgree').checked) { gateError('Please accept the Privacy Policy to create an account.'); return; }
+  submitAuth($('#suGo'), 'Creating your account...', 'Create my account',
+    () => api('POST', '/api/auth/signup', { name, email, password, acceptPrivacy: true, avatar: state.signupAvatar }));
+});
+
+// profile photo while signing up
+function renderSignupAvatar() {
+  const prev = $('#suAvatarPrev');
+  if (state.signupAvatar) {
+    prev.replaceChildren(h('img', { class: 'avatar', src: state.signupAvatar, alt: 'Your profile photo' }));
+  } else {
+    prev.replaceChildren(icon('image', 24));
+  }
+  $('#suAvatarClear').hidden = !state.signupAvatar;
+}
+$('#suAvatarBtn').addEventListener('click', () => $('#suAvatarFile').click());
+$('#suAvatarFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try { state.signupAvatar = await fileToAvatar(f); renderSignupAvatar(); }
+  catch (err) { gateError(err.message); }
+});
+$('#suAvatarClear').addEventListener('click', () => { state.signupAvatar = null; renderSignupAvatar(); });
+
+// Google sign-in (only appears when the site owner has set GOOGLE_CLIENT_ID)
+function loadGoogle() {
+  const id = state.config && state.config.googleClientId;
+  if (!id || state.googleLoading) return;
+  state.googleLoading = true;
+  const s = document.createElement('script');
+  s.src = 'https://accounts.google.com/gsi/client';
+  s.async = true;
+  s.onload = () => {
+    try {
+      window.google.accounts.id.initialize({ client_id: id, callback: onGoogleCredential });
+      window.google.accounts.id.renderButton($('#googleBtn'), {
+        theme: document.documentElement.dataset.theme === 'dark' ? 'filled_black' : 'outline',
+        size: 'large', shape: 'pill', text: 'continue_with', width: 340,
+      });
+      $('#googleWrap').hidden = false;
+    } catch (e) { /* keep the email form only */ }
+  };
+  document.head.append(s);
+}
+
+async function onGoogleCredential(response) {
+  gateError('');
+  try {
+    const { user } = await api('POST', '/api/auth/google', { credential: response.credential });
+    onSignedIn(user, true);
+  } catch (e) { gateError(e.message); }
+}
+
+function onSignedIn(user, fresh) {
+  state.user = user;
+  store.set('hasAccount', '1');
+  renderAccount();
+  const d = $('#gate');
+  if (d.open) d.close();
+  document.body.classList.remove('gated');
+  $('#siPass').value = '';
+  $('#suPass').value = '';
+  if (fresh) toast(`Welcome, ${user.name.split(' ')[0]}`);
+  afterAuth();
+}
+
+// everything that needs the person's own data
+async function afterAuth() {
+  loadLibrary(true);
+  const active = store.get('activeJob');
+  if (!active) return;
+  try {
+    const v = await api('GET', `/api/videos/${active}`);
+    renderJob(v);
+    if (v.status === 'done') { showVideo(v); store.del('activeJob'); }
+    else if (v.status === 'error') store.del('activeJob');
+    else { state.activeId = active; setBusy(true); poll(active); }
+  } catch (e) { store.del('activeJob'); }
+}
+
+// forget the previous person's work on this screen
+function clearLocalSession() {
+  state.user = null;
+  state.lib = [];
+  state.activeId = null;
+  setBusy(false);
+  store.del('activeJob');
+  store.del('draft');
+  el.script.value = '';
+  updateCount();
+  resetStage();
+  renderLibrary();
+  renderRecent();
+  renderAccount();
+}
+
+async function signOut() {
+  try { await api('POST', '/api/auth/logout', {}); } catch (e) { /* the cookie is cleared by the next request anyway */ }
+  clearLocalSession();
+  showGate();
+}
+
+// ---------- Delete my account ----------
+$('#acctDelete').addEventListener('click', () => {
+  closeAccountMenu();
+  $('#delPw').value = '';
+  $('#delErr').hidden = true;
+  $('#delPwWrap').hidden = !(state.user && state.user.hasPassword);
+  $('#delAcct').showModal();
+});
+$('#delCancel').addEventListener('click', () => $('#delAcct').close());
+$('#delGo').addEventListener('click', async () => {
+  const btn = $('#delGo');
+  btn.disabled = true;
+  $('#delErr').hidden = true;
+  try {
+    await api('DELETE', '/api/auth/account', { password: $('#delPw').value });
+    $('#delAcct').close();
+    clearLocalSession();
+    toast('Your account and everything in it was deleted.');
+    showGate();
+  } catch (e) {
+    $('#delErr').textContent = e.message;
+    $('#delErr').hidden = false;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------- Privacy Policy ----------
+function applyContact() {
+  const email = state.config && state.config.contactEmail;
+  $$('[data-contact]').forEach((p) => {
+    p.replaceChildren();
+    if (email) p.append('You can contact the site owner, Anas Khalid, at ', h('a', { href: `mailto:${email}` }, email), '.');
+    else p.append('You can contact the site owner, Anas Khalid, through the website where you found this service.');
+  });
+}
+
+function fillPolicy() {
+  const tpl = $('#policyTpl');
+  ['#policyBody', '#policyDlgBody'].forEach((sel) => $(sel).replaceChildren(tpl.content.cloneNode(true)));
+  applyContact();
+}
+
+function openPolicy() {
+  const d = $('#policyDlg');
+  if (d.showModal) { if (!d.open) d.showModal(); } else go('privacy');
+}
+$$('[data-open-policy]').forEach((b) => b.addEventListener('click', openPolicy));
+$('#policyClose').addEventListener('click', () => $('#policyDlg').close());
+
+async function initAuth() {
+  try { state.config = await api('GET', '/api/config'); } catch (e) { state.config = {}; }
+  applyContact();
+  try {
+    const { user } = await api('GET', '/api/auth/me');
+    onSignedIn(user, false);
+  } catch (e) {
+    if (e.status === 401) showGate();
+    else { document.body.classList.remove('gated'); toast('Could not reach the server. Please refresh the page.', 'error'); }
+  }
+}
+
 // ---------- Boot ----------
 async function boot() {
   hydrateIcons();
@@ -1604,19 +1939,9 @@ async function boot() {
   updateCount();
   renderSteps(null);
 
+  renderSignupAvatar();
+  fillPolicy();
   route();
-  loadLibrary(true);
-
-  // Resume a render that was running when the page was closed.
-  const active = store.get('activeJob');
-  if (active) {
-    try {
-      const v = await api('GET', `/api/videos/${active}`);
-      renderJob(v);
-      if (v.status === 'done') { showVideo(v); store.del('activeJob'); }
-      else if (v.status === 'error') store.del('activeJob');
-      else { state.activeId = active; setBusy(true); poll(active); }
-    } catch (e) { store.del('activeJob'); }
-  }
+  await initAuth();
 }
 boot();

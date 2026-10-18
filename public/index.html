@@ -26,7 +26,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body class="gated">
 
 <header class="nav">
   <a class="brand" href="#create" aria-label="ScriptReel home">
@@ -61,6 +61,21 @@
       <span class="ico-sun" data-icon="sun"></span>
       <span class="ico-moon" data-icon="moon"></span>
     </button>
+    <div class="acct-wrap" id="acctWrap" hidden>
+      <button class="avatar-btn" id="accountBtn" type="button" aria-label="Your account" aria-haspopup="true" aria-expanded="false"></button>
+      <div class="popover acct" id="accountMenu" role="menu" hidden>
+        <div class="acct-head">
+          <span id="acctAvatarBig"></span>
+          <div class="acct-who"><strong id="acctName"></strong><span id="acctEmail"></span></div>
+        </div>
+        <button type="button" class="acct-item" id="acctChange" role="menuitem">Change profile photo</button>
+        <button type="button" class="acct-item" id="acctRemove" role="menuitem" hidden>Remove profile photo</button>
+        <button type="button" class="acct-item" id="acctPrivacy" role="menuitem">Privacy Policy</button>
+        <button type="button" class="acct-item" id="acctSignout" role="menuitem">Sign out</button>
+        <button type="button" class="acct-item danger" id="acctDelete" role="menuitem">Delete my account</button>
+        <input type="file" id="acctFile" accept="image/*" hidden />
+      </div>
+    </div>
   </div>
 </header>
 
@@ -572,10 +587,20 @@
       </section>
     </div>
   </section>
+
+  <!-- ============ PRIVACY ============ -->
+  <section id="view-privacy" class="view" aria-labelledby="h-privacy" hidden>
+    <div class="page-head">
+      <h1 id="h-privacy">Privacy Policy</h1>
+      <p>What ScriptReel does with your information, in plain words.</p>
+    </div>
+    <div class="guide-block policy-wrap" id="policyBody"></div>
+  </section>
 </main>
 
 <footer class="foot">
   <span>&copy; <span id="year">2026</span> <strong>Anas Khalid</strong>. All rights reserved.</span>
+  <a class="linkbtn" href="#privacy">Privacy Policy</a>
   <button class="linkbtn" id="btnShortcuts" type="button">Keyboard shortcuts</button>
 </footer>
 
@@ -691,6 +716,153 @@
     </table>
     <div class="dialog-actions"><button class="btn primary" value="ok" type="submit">Close</button></div>
   </form>
+</dialog>
+
+<template id="policyTpl">
+  <div class="policy">
+    <p class="policy-date">Last updated: October 18, 2026</p>
+    <p>ScriptReel turns text into videos. It is run by <strong>Anas Khalid</strong> (&ldquo;we&rdquo;). This policy explains what information the service uses, why, who else receives it, and the choices you have. We wrote it to match exactly what the service does.</p>
+
+    <h3>1. What we collect</h3>
+    <ul>
+      <li><strong>Account details:</strong> your name, your email address, and your password. Your password is never stored as you typed it. Only a salted, one-way scrypt hash is kept, so nobody, including us, can read it.</li>
+      <li><strong>Profile picture (optional):</strong> a photo you upload, or the picture from your Google account if you sign in with Google.</li>
+      <li><strong>Your content:</strong> the scripts you write or paste, the scenes you edit, your video settings, and the videos, preview pictures and caption files made for you.</li>
+      <li><strong>Files you add to a video:</strong> a logo or a music file. These are used only to make that video and are deleted as soon as it finishes.</li>
+      <li><strong>The date you accepted this policy.</strong></li>
+    </ul>
+    <p>We do not use advertising, analytics or tracking tools, and we do not sell your information.</p>
+
+    <h3>2. Cookies and storage in your browser</h3>
+    <ul>
+      <li><strong>Sign-in cookie</strong> (<code>sr_session</code>): keeps you signed in for up to 90 days so you do not have to sign in every visit. It is needed for the service to work and cannot be read by page scripts. Signing out removes it.</li>
+      <li><strong>Local storage</strong> in your browser: your theme and accent colour, your draft script, your last settings, your saved settings, your library view and sort choice, and whether you closed the welcome tip. This stays on your device.</li>
+    </ul>
+
+    <h3>3. Other services that receive some of your information</h3>
+    <p>To make a video, the service sends limited information to these providers. Each has its own privacy policy.</p>
+    <ul>
+      <li><strong>Groq:</strong> the text of your script (or your topic when you use Write with AI), to plan scenes and write scripts.</li>
+      <li><strong>Microsoft (Edge text-to-speech):</strong> the narration text and the voice you chose, to create the voiceover. It is also used for the short voice samples.</li>
+      <li><strong>Pixabay:</strong> the search words for each scene, to find footage. Footage you receive is subject to the Pixabay Content License.</li>
+      <li><strong>Google:</strong> if you choose &ldquo;Continue with Google&rdquo;, Google tells us your name, verified email address and picture. Your browser also loads page fonts from Google Fonts.</li>
+      <li><strong>MongoDB Atlas:</strong> the database where account details, scripts and library entries are stored.</li>
+      <li><strong>The hosting service or tunnel</strong> that puts this site on the internet can see normal connection details such as your IP address.</li>
+    </ul>
+
+    <h3>4. How we use your information</h3>
+    <ul>
+      <li>To create your account, keep you signed in, and show your own library.</li>
+      <li>To make the videos you ask for.</li>
+      <li>To protect the service, for example by limiting repeated sign-in attempts. Your IP address is held in the server&rsquo;s memory for this and is not saved in the database.</li>
+    </ul>
+    <p>Only you can open your videos. Other people who use the site cannot see your scripts, videos or library.</p>
+
+    <h3>5. How long we keep it</h3>
+    <ul>
+      <li>Scripts, videos and library entries are kept until you delete them or delete your account.</li>
+      <li>Temporary working files, including any logo or music you added, are deleted when a video finishes or fails.</li>
+      <li>Some hosts erase saved video files when they restart. If that happens, your library shows the video as expired.</li>
+      <li>Our database provider may keep backups for a limited time after you delete something.</li>
+    </ul>
+
+    <h3>6. Your choices</h3>
+    <ul>
+      <li>Delete one video, or all your videos, from the Library.</li>
+      <li>Change or remove your profile picture from the profile menu.</li>
+      <li>Delete your account from the profile menu. This permanently removes your account, scripts, videos, pictures and caption files.</li>
+      <li>Sign out at any time. Clearing your browser data removes the sign-in cookie and the settings stored on your device.</li>
+    </ul>
+
+    <h3>7. Security</h3>
+    <p>Passwords are hashed, the sign-in cookie is protected from page scripts, and each person can only open their own files. No online service is perfectly secure, so please use a strong, unique password and avoid putting secrets in scripts.</p>
+
+    <h3>8. Children</h3>
+    <p>ScriptReel is not meant for children under 13, or under 16 where the law sets a higher age. Please do not create an account if you are younger.</p>
+
+    <h3>9. Changes</h3>
+    <p>If we change how the service handles information, we will update this page and the date above.</p>
+
+    <h3>10. Contact</h3>
+    <p data-contact></p>
+  </div>
+</template>
+
+
+<dialog id="gate" class="gate" aria-labelledby="gateTitle">
+  <div class="gate-card">
+    <div class="gate-brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="2" y="9" width="28" height="19" rx="3" style="fill:currentColor"/>
+        <path d="M3 4.5l25 -1.5 1.2 5.5 -25 1.5z" style="fill:var(--amber)"/>
+        <path d="M9 3.8l3.2 5.2M16 3.4l3.2 5.2M23 3l3.2 5.2" style="stroke:var(--surface)" stroke-width="2"/>
+        <path d="M13 15.5v8l7-4z" style="fill:var(--surface)"/>
+      </svg>
+      <span class="brand-name">ScriptReel</span>
+    </div>
+    <h2 id="gateTitle">Welcome</h2>
+    <p class="gate-sub" id="gateSub">Sign in to make videos and keep them in your own private library.</p>
+
+    <div class="gate-tabs" role="tablist" aria-label="Sign in or create an account">
+      <button type="button" role="tab" id="gtSignin" aria-selected="true" aria-controls="signinForm">Sign in</button>
+      <button type="button" role="tab" id="gtSignup" aria-selected="false" aria-controls="signupForm">Create account</button>
+    </div>
+
+    <div id="googleWrap" hidden>
+      <div id="googleBtn"></div>
+      <div class="or"><span>or use your email</span></div>
+    </div>
+
+    <form id="signinForm" class="gate-form" novalidate>
+      <label class="field"><span class="field-label">Email</span>
+        <input class="input" type="email" id="siEmail" autocomplete="email" placeholder="you@example.com" required /></label>
+      <label class="field"><span class="field-label">Password</span>
+        <input class="input" type="password" id="siPass" autocomplete="current-password" placeholder="Your password" required /></label>
+      <label class="check"><input type="checkbox" id="siShow" /><span>Show password</span></label>
+      <button class="btn primary lg" id="siGo" type="submit">Sign in</button>
+    </form>
+
+    <form id="signupForm" class="gate-form" novalidate hidden>
+      <div class="su-photo">
+        <button type="button" class="su-avatar" id="suAvatarBtn" aria-label="Add a profile photo (optional)"><span id="suAvatarPrev"></span></button>
+        <div><strong>Profile photo</strong><span>Optional. Shown in the top bar.</span>
+          <button type="button" class="linkbtn" id="suAvatarClear" hidden>Remove</button></div>
+        <input type="file" id="suAvatarFile" accept="image/*" hidden />
+      </div>
+      <label class="field"><span class="field-label">Name</span>
+        <input class="input" type="text" id="suName" autocomplete="name" maxlength="60" placeholder="Your name" required /></label>
+      <label class="field"><span class="field-label">Email</span>
+        <input class="input" type="email" id="suEmail" autocomplete="email" placeholder="you@example.com" required /></label>
+      <label class="field"><span class="field-label">Password <small>(at least 8 characters)</small></span>
+        <input class="input" type="password" id="suPass" autocomplete="new-password" minlength="8" placeholder="Choose a password" required /></label>
+      <label class="check"><input type="checkbox" id="suShow" /><span>Show password</span></label>
+      <label class="check consent"><input type="checkbox" id="suAgree" /><span>I have read and agree to the <button type="button" class="linkbtn" data-open-policy>Privacy Policy</button>.</span></label>
+      <button class="btn primary lg" id="suGo" type="submit">Create my account</button>
+    </form>
+
+    <p class="gate-error" id="gateError" role="alert" hidden></p>
+    <p class="gate-foot">Your scripts and videos stay private to your account. <button type="button" class="linkbtn" data-open-policy>Privacy Policy</button></p>
+  </div>
+</dialog>
+
+<dialog id="policyDlg" class="dialog wide" aria-labelledby="policyDlgTitle">
+  <div class="studio-head">
+    <h3 id="policyDlgTitle">Privacy Policy</h3>
+    <button class="icon-btn" id="policyClose" type="button" aria-label="Close"><span data-icon="x"></span></button>
+  </div>
+  <div class="studio-body policy-wrap" id="policyDlgBody"></div>
+</dialog>
+
+<dialog id="delAcct" class="dialog" aria-labelledby="delTitle">
+  <h3 id="delTitle">Delete your account?</h3>
+  <p class="dialog-sub">This permanently deletes your account, your scripts and every video you made. It cannot be undone.</p>
+  <label class="field" id="delPwWrap"><span class="field-label">Type your password to confirm</span>
+    <input class="input" type="password" id="delPw" autocomplete="current-password" /></label>
+  <p class="gate-error" id="delErr" role="alert" hidden></p>
+  <div class="dialog-actions">
+    <button class="btn ghost" id="delCancel" type="button">Cancel</button>
+    <button class="btn danger" id="delGo" type="button">Delete everything</button>
+  </div>
 </dialog>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>

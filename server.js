@@ -5,6 +5,8 @@ const fs = require('fs');
 const path = require('path');
 
 const Video = require('./models/Video');
+const User = require('./models/User');
+const { register: registerAuth } = require('./routes/auth');
 const { analyzeScript, writeScript } = require('./services/groq');
 const { findMedia, searchCandidates, downloadFile } = require('./services/pixabay');
 const { synthesize } = require('./services/tts');
@@ -26,7 +28,6 @@ app.get('/healthz', (req, res) => res.send('ok')); // for hosting health checks
 app.use(basicAuth(process.env.APP_PASSWORD));
 app.use(express.json({ limit: '30mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/output', express.static(OUTPUT_DIR));
 
 const videoLimiter = createLimiter({ max: parseInt(process.env.MAX_VIDEOS_PER_HOUR || '0', 10), message: 'You have reached the hourly video limit.' });
 const previewLimiter = createLimiter({ max: process.env.MAX_VIDEOS_PER_HOUR ? 60 : 0, message: 'Too many voice samples.' });
@@ -297,6 +298,16 @@ function withFileState(doc) {
 
 // ---- API ----
 
+// accounts (sign up, sign in, profile picture, protected video files)
+registerAuth(app, { User, Video, outputDir: OUTPUT_DIR, removeFiles, wrap });
+
+// everything below needs a signed-in person
+app.use('/api', (req, res, next) => {
+  if (!req.user) return res.status(401).json({ error: 'Please sign in.' });
+  next();
+});
+
+
 app.post('/api/videos', videoLimiter, wrap(async (req, res) => {
   try {
     const script = (req.body.script || '').trim();
@@ -310,7 +321,7 @@ app.post('/api/videos', videoLimiter, wrap(async (req, res) => {
     if (options.music.on && !music) options.music.on = false;
 
     const plan = sanitizePlan(req.body.plan);
-    const video = await Video.create({ script, options, plan });
+    const video = await Video.create({ owner: req.user._id, script, options, plan });
     const dir = path.join(TEMP_DIR, String(video._id));
     fs.mkdirSync(dir, { recursive: true });
     if (logo) fs.writeFileSync(path.join(dir, 'wm.img'), logo);
@@ -375,28 +386,29 @@ app.post('/api/write', toolLimiter, async (req, res) => {
 });
 
 app.get('/api/videos', wrap(async (req, res) => {
-  res.json((await Video.find().sort({ createdAt: -1 }).limit(100)).map(withFileState));
+  res.json((await Video.find({ owner: req.user._id }).sort({ createdAt: -1 }).limit(100)).map(withFileState));
 }));
 
 app.get('/api/videos/:id', wrap(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: 'Not found' });
   const video = await Video.findById(req.params.id);
-  if (!video) return res.status(404).json({ error: 'Not found' });
+  if (!video || String(video.owner) !== String(req.user._id)) return res.status(404).json({ error: 'Not found' });
   res.json(withFileState(video));
 }));
 
 app.delete('/api/videos/:id', wrap(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: 'Not found' });
+  const found = await Video.findById(req.params.id);
+  if (!found || String(found.owner) !== String(req.user._id)) return res.status(404).json({ error: 'Not found' });
   const video = await Video.findByIdAndDelete(req.params.id);
-  if (!video) return res.status(404).json({ error: 'Not found' });
   removeFiles(video);
   res.json({ deleted: 1 });
 }));
 
 app.delete('/api/videos', wrap(async (req, res) => {
-  const all = await Video.find().select('videoFile posterFile srtFile');
+  const all = await Video.find({ owner: req.user._id }).select('videoFile posterFile srtFile');
   all.forEach(removeFiles);
-  const result = await Video.deleteMany({});
+  const result = await Video.deleteMany({ owner: req.user._id });
   res.json({ deleted: result.deletedCount });
 }));
 
