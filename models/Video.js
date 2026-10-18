@@ -13,6 +13,7 @@ const SceneSchema = new mongoose.Schema({
 
 const VideoSchema = new mongoose.Schema(
   {
+    owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     script: { type: String, required: true },
     status: { type: String, default: 'queued' }, // queued | processing | done | error
     progress: { type: String, default: 'Queued' },

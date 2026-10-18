@@ -15,6 +15,7 @@ ScriptReel is not a normal website. Making a video runs FFmpeg for a minute or m
 | Fly.io | No free plan | No. |
 
 ## Before going public (all options)
+0. Accounts are built in. On hosts that erase files on restart, set `SESSION_SECRET` (a long random text) so people stay signed in, and set `CONTACT_EMAIL` for the Privacy Policy. Add your public address to the Google sign-in origins if you use Google.
 1. Set `APP_PASSWORD` so strangers cannot use your Groq and Pixabay keys. Also set `MAX_VIDEOS_PER_HOUR`.
 2. In MongoDB Atlas, Network Access: allow the host's address. On hosts with changing addresses, use `0.0.0.0/0`. The database password is then your protection.
 3. Put your keys in the host's environment variables. Never upload your `.env` file. The Docker setup already skips it.
