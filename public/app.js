@@ -42,6 +42,12 @@ const ICONS = {
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
   stop: '<rect x="6" y="6" width="12" height="12" rx="1.5"/>',
   loader: '<path d="M12 3a9 9 0 1 0 9 9"/>',
+  palette: '<circle cx="13.5" cy="6.5" r="1.2"/><circle cx="17.5" cy="10.5" r="1.2"/><circle cx="8.5" cy="7.5" r="1.2"/><circle cx="6.5" cy="12.5" r="1.2"/><path d="M12 22a10 10 0 1 1 10-10c0 2.5-2 3-3.5 3H16a2 2 0 0 0-1.4 3.4c.6.6.4 1.6-.2 2.2-.7.9-1.4 1.4-2.4 1.4z"/>',
+  layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 17l9 5 9-5"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  up: '<path d="M6 15l6-6 6 6"/>',
+  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>',
   file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
 };
 
@@ -88,6 +94,7 @@ function confirmDialog(title, text, okLabel = 'Delete') {
   $('#confirmText').textContent = text;
   $('#confirmOk').textContent = okLabel;
   return new Promise((resolve) => {
+    dlg.returnValue = '';
     dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok'), { once: true });
     dlg.showModal();
   });
@@ -320,6 +327,38 @@ const VOICE_GROUPS = (defaultName) => [
     { value: 'en-IN-PrabhatNeural', name: 'Prabhat', meta: 'Male' },
     { value: 'en-IN-NeerjaNeural', name: 'Neerja', meta: 'Female' },
   ] },
+  { group: 'Urdu', items: [
+    { value: 'ur-PK-AsadNeural', name: 'Asad', meta: 'Male' },
+    { value: 'ur-PK-UzmaNeural', name: 'Uzma', meta: 'Female' },
+  ] },
+  { group: 'Hindi', items: [
+    { value: 'hi-IN-MadhurNeural', name: 'Madhur', meta: 'Male' },
+    { value: 'hi-IN-SwaraNeural', name: 'Swara', meta: 'Female' },
+  ] },
+  { group: 'Arabic', items: [
+    { value: 'ar-SA-HamedNeural', name: 'Hamed', meta: 'Male' },
+    { value: 'ar-SA-ZariyahNeural', name: 'Zariyah', meta: 'Female' },
+  ] },
+  { group: 'Spanish', items: [
+    { value: 'es-ES-AlvaroNeural', name: 'Alvaro', meta: 'Male' },
+    { value: 'es-ES-ElviraNeural', name: 'Elvira', meta: 'Female' },
+  ] },
+  { group: 'French', items: [
+    { value: 'fr-FR-HenriNeural', name: 'Henri', meta: 'Male' },
+    { value: 'fr-FR-DeniseNeural', name: 'Denise', meta: 'Female' },
+  ] },
+  { group: 'German', items: [
+    { value: 'de-DE-ConradNeural', name: 'Conrad', meta: 'Male' },
+    { value: 'de-DE-KatjaNeural', name: 'Katja', meta: 'Female' },
+  ] },
+  { group: 'Portuguese', items: [
+    { value: 'pt-BR-AntonioNeural', name: 'Antonio', meta: 'Male' },
+    { value: 'pt-BR-FranciscaNeural', name: 'Francisca', meta: 'Female' },
+  ] },
+  { group: 'Turkish', items: [
+    { value: 'tr-TR-AhmetNeural', name: 'Ahmet', meta: 'Male' },
+    { value: 'tr-TR-EmelNeural', name: 'Emel', meta: 'Female' },
+  ] },
 ];
 
 const FONT_GROUPS = [{
@@ -332,7 +371,7 @@ const FONT_GROUPS = [{
 const state = {
   current: null, activeId: null, busy: false,
   lib: [], filter: 'all', query: '', libTimer: null,
-  logoData: null, musicData: null,
+  logoData: null, musicData: null, view: store.get('libView') || 'list', sort: store.get('libSort') || 'new',
   sampleQueue: [], lastSample: -1,
 };
 
@@ -725,7 +764,9 @@ function updateCount() {
   let msg = `${words} ${words === 1 ? 'word' : 'words'}`;
   if (scenes) msg += `, ${scenes} scenes`;
   if (secs) msg += `, about ${fmtDur(secs)} of video`;
+  if (text.length > 18000) msg += ', close to the 20,000 character limit';
   el.count.textContent = msg;
+  el.count.classList.toggle('warn', text.length > 18000);
   store.set('draft', text);
 }
 el.script.addEventListener('input', updateCount);
@@ -913,7 +954,7 @@ function renderJob(v) {
 }
 
 // ---------- Generate and poll ----------
-async function generate() {
+async function generate(plan = null) {
   if (state.busy) return;
   const script = el.script.value.trim();
   if (!script) { toast('Write or paste a script first.', 'error'); el.script.focus(); return; }
@@ -928,6 +969,7 @@ async function generate() {
   setStatus('Starting...');
   try {
     const body = { script, ...settings };
+    if (plan) body.plan = plan;
     if (settings.watermark.type === 'image') body.watermarkImage = state.logoData;
     if (state.musicData) body.musicFile = state.musicData;
     const { id } = await api('POST', '/api/videos', body);
@@ -940,7 +982,7 @@ async function generate() {
     toast(e.message, 'error');
   }
 }
-el.go.addEventListener('click', generate);
+el.go.addEventListener('click', () => generate());
 
 async function poll(id, failures = 0) {
   if (state.activeId !== id) return;
@@ -950,6 +992,7 @@ async function poll(id, failures = 0) {
     el.rec.hidden = false;
     if (v.status === 'done') {
       finishJob(); showVideo(v); toast('Your video is ready.'); loadLibrary(true);
+      store.set('welcomeSeen', '1'); syncWelcome();
     } else if (v.status === 'error') {
       finishJob(); toast('The video could not be finished.', 'error'); loadLibrary(true);
     } else {
@@ -1005,6 +1048,7 @@ async function loadLibrary(silent = false) {
   pill.textContent = state.lib.length;
   pill.hidden = !state.lib.length;
   renderLibrary();
+  renderRecent();
 
   clearTimeout(state.libTimer);
   const working = state.lib.some((v) => v.status === 'queued' || v.status === 'processing');
@@ -1025,11 +1069,13 @@ function renderLibrary() {
     ? `${all.length} ${all.length === 1 ? 'video' : 'videos'}, ${fmtDur(totalSec)} of footage in total`
     : 'Everything you generate is saved here.';
   $('#libClear').hidden = !all.length;
+  renderTiles(all);
 
   const q = state.query.trim().toLowerCase();
-  const rows = all.filter((v) => matchesFilter(v) && (!q || v.script.toLowerCase().includes(q)));
+  const rows = sortRows(all.filter((v) => matchesFilter(v) && (!q || v.script.toLowerCase().includes(q))));
   const list = $('#reels');
   list.replaceChildren();
+  list.classList.toggle('grid', state.view === 'grid');
 
   if (!rows.length) {
     list.append(
@@ -1141,6 +1187,405 @@ $('#btnUseExample').addEventListener('click', () => {
   toast('Example loaded. Press Generate video.');
 });
 
+// ---------- Accent colour ----------
+function setAccent(name) {
+  if (name === 'blue') delete document.documentElement.dataset.accent;
+  else document.documentElement.dataset.accent = name;
+  store.set('accent', name);
+  $$('.swatch').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.accent === name)));
+}
+function closeAccentMenu() {
+  $('#accentMenu').hidden = true;
+  $('#accentBtn').setAttribute('aria-expanded', 'false');
+}
+$('#accentBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const menu = $('#accentMenu');
+  menu.hidden = !menu.hidden;
+  $('#accentBtn').setAttribute('aria-expanded', String(!menu.hidden));
+});
+$$('.swatch').forEach((b) => b.addEventListener('click', () => { setAccent(b.dataset.accent); closeAccentMenu(); }));
+document.addEventListener('click', (e) => { if (!$('#accentMenu').hidden && !e.target.closest('.pal-wrap')) closeAccentMenu(); });
+
+// ---------- Welcome tip ----------
+function syncWelcome() { $('#welcome').hidden = !!store.get('welcomeSeen'); }
+$('#welcomeClose').addEventListener('click', () => { store.set('welcomeSeen', '1'); syncWelcome(); });
+$('#welcomeTry').addEventListener('click', () => {
+  $('#btnSample').click();
+  el.script.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+// ---------- Write with AI ----------
+const LANG_VOICES = {
+  Urdu: ['ur-PK-AsadNeural', 'ur-PK-UzmaNeural'], Hindi: ['hi-IN-MadhurNeural', 'hi-IN-SwaraNeural'],
+  Arabic: ['ar-SA-HamedNeural', 'ar-SA-ZariyahNeural'], Spanish: ['es-ES-AlvaroNeural', 'es-ES-ElviraNeural'],
+  French: ['fr-FR-HenriNeural', 'fr-FR-DeniseNeural'], German: ['de-DE-ConradNeural', 'de-DE-KatjaNeural'],
+  Portuguese: ['pt-BR-AntonioNeural', 'pt-BR-FranciscaNeural'], Turkish: ['tr-TR-AhmetNeural', 'tr-TR-EmelNeural'],
+};
+
+$('#btnWrite').addEventListener('click', () => {
+  const d = $('#writer');
+  if (!d.showModal) { toast('Please update your browser to use this feature.', 'error'); return; }
+  d.showModal();
+  $('#wTopic').focus();
+});
+$('#wCancel').addEventListener('click', () => $('#writer').close());
+$('#wGo').addEventListener('click', async () => {
+  const topic = $('#wTopic').value.trim();
+  if (topic.length < 3) { toast('Tell me what the video is about first.', 'error'); $('#wTopic').focus(); return; }
+  const lang = radio('wLang');
+  const btn = $('#wGo');
+  btn.disabled = true;
+  $('#wGoLabel').textContent = 'Writing...';
+  try {
+    const { script } = await api('POST', '/api/write', {
+      topic, tone: radio('wTone'), seconds: +radio('wLen'), style: radio('wStyle'), language: lang,
+    });
+    el.script.value = script;
+    updateCount();
+    const pair = LANG_VOICES[lang];
+    if (pair) { voiceDd.set(pair[0]); charDd.set(pair[1]); }
+    $('#writer').close();
+    toast(pair ? `Script written. The voices were switched to ${lang}.` : 'Script written. Press Generate video, or Review scenes first.');
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    $('#wGoLabel').textContent = 'Write script';
+  }
+});
+
+// ---------- Saved settings ----------
+function myPresets() { try { return JSON.parse(store.get('presets') || '[]'); } catch (e) { return []; } }
+
+function renderMyPresets() {
+  const list = myPresets();
+  const wrap = $('#myPresets');
+  wrap.hidden = !list.length;
+  wrap.replaceChildren(...list.map((p, i) => h('span', { class: 'chip-group' },
+    h('button', { class: 'chip', type: 'button', onclick: () => { applySettings(deepMerge(getSettings(), p.settings)); persist(); toast(`${p.name} applied`); } }, p.name),
+    h('button', {
+      class: 'chip-x', type: 'button', 'aria-label': `Delete the saved settings ${p.name}`,
+      onclick: () => { const l = myPresets(); l.splice(i, 1); store.set('presets', JSON.stringify(l)); renderMyPresets(); },
+    }, icon('x', 12)))));
+}
+
+$('#savePreset').addEventListener('click', () => {
+  $('#presetName').value = '';
+  $('#nameDlg').returnValue = '';
+  $('#nameDlg').showModal();
+  $('#presetName').focus();
+});
+$('#presetName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#presetOk').click(); } });
+$('#nameDlg').addEventListener('close', () => {
+  if ($('#nameDlg').returnValue !== 'ok') return;
+  const name = $('#presetName').value.trim().slice(0, 30);
+  if (!name) return;
+  const s = getSettings();
+  s.music.on = false;
+  const list = myPresets().filter((p) => p.name !== name);
+  list.push({ name, settings: s });
+  store.set('presets', JSON.stringify(list.slice(-8)));
+  renderMyPresets();
+  toast(`Saved "${name}"`);
+});
+
+// ---------- Shortcuts ----------
+$('#btnShortcuts').addEventListener('click', () => $('#shortcuts').showModal());
+document.addEventListener('keydown', (e) => {
+  if (e.key === '?' && !e.target.closest('input, textarea, select') && !document.querySelector('dialog[open]')) {
+    e.preventDefault();
+    $('#shortcuts').showModal();
+  }
+});
+
+// ---------- Drop a text file onto the script box ----------
+['dragenter', 'dragover'].forEach((ev) => el.script.addEventListener(ev, (e) => { e.preventDefault(); el.script.classList.add('drop'); }));
+['dragleave', 'drop'].forEach((ev) => el.script.addEventListener(ev, () => el.script.classList.remove('drop')));
+el.script.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer && e.dataTransfer.files[0];
+  if (!f) return;
+  if (f.size > 500 * 1024) { toast('That file is too large for a script.', 'error'); return; }
+  const fr = new FileReader();
+  fr.onload = () => { el.script.value = String(fr.result); updateCount(); toast(`Opened ${f.name}`); };
+  fr.readAsText(f);
+});
+
+// ---------- Recent videos ----------
+function renderRecent() {
+  const recent = state.lib.filter((v) => v.status === 'done' && v.videoFile && !v.fileMissing).slice(0, 4);
+  $('#recent').hidden = !recent.length;
+  $('#recentRow').replaceChildren(...recent.map((v) => h('button', {
+    class: 'recent-item', type: 'button', title: 'Watch this video',
+    onclick: () => {
+      if (state.busy) { toast('A video is still rendering. Wait for it to finish.', 'error'); return; }
+      showVideo(v); renderJob(v); window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+  }, h('span', { class: 'rimg' }, v.posterFile ? h('img', { src: `/output/${v.posterFile}`, alt: '', loading: 'lazy' }) : icon('film', 24)),
+  h('span', { class: 't' }, titleOf(v.script)))));
+}
+
+// ---------- Library: sort and view ----------
+function sortRows(rows) {
+  const r = [...rows];
+  if (state.sort === 'old') r.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  else if (state.sort === 'long') r.sort((a, b) => videoDuration(b) - videoDuration(a));
+  else r.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  return r;
+}
+
+function renderTiles(all) {
+  const box = $('#libTiles');
+  box.hidden = !all.length;
+  if (!all.length) return;
+  const done = all.filter((v) => v.status === 'done').length;
+  const tiles = [
+    [all.length, all.length === 1 ? 'Video made' : 'Videos made'],
+    [fmtDur(all.reduce((a, v) => a + videoDuration(v), 0)), 'Total length'],
+    [all.reduce((a, v) => a + (v.scenes || []).length, 0), 'Scenes'],
+    [`${Math.round((done / all.length) * 100)}%`, 'Finished without errors'],
+  ];
+  box.replaceChildren(...tiles.map(([n, label]) => h('div', { class: 'tile' }, h('b', {}, String(n)), h('span', {}, label))));
+}
+
+function syncLibControls() {
+  $$('.chip[data-sort]').forEach((x) => x.classList.toggle('on', x.dataset.sort === state.sort));
+  [['viewList', 'list'], ['viewGrid', 'grid']].forEach(([id, v]) => {
+    const b = $(`#${id}`);
+    b.classList.toggle('on', state.view === v);
+    b.setAttribute('aria-pressed', String(state.view === v));
+  });
+}
+$$('.chip[data-sort]').forEach((c) => c.addEventListener('click', () => {
+  state.sort = c.dataset.sort; store.set('libSort', state.sort); syncLibControls(); renderLibrary();
+}));
+$('#viewList').addEventListener('click', () => { state.view = 'list'; store.set('libView', 'list'); syncLibControls(); renderLibrary(); });
+$('#viewGrid').addEventListener('click', () => { state.view = 'grid'; store.set('libView', 'grid'); syncLibControls(); renderLibrary(); });
+
+// ---------- Scene editor ----------
+const studio = { scenes: [], style: 'film', snapshot: '', warning: null, loading: false };
+let studioSeq = 0;
+const newScene = (o = {}) => ({
+  id: ++studioSeq, text: '', speaker: 'narrator', visual: '', keywords: [], media: null,
+  picker: false, results: null, searching: false, query: '', pickError: '', ...o,
+});
+const wordsOf = (t) => (t.trim() ? t.trim().split(/\s+/).length : 0);
+
+function updateStudioSum() {
+  const n = studio.scenes.length;
+  const secs = studio.scenes.reduce((a, s) => a + (s.text.trim() ? Math.max(3, wordsOf(s.text) / 2.5 + 0.4) : 4), 0);
+  $('#studioSum').textContent = `${n} ${n === 1 ? 'scene' : 'scenes'}, about ${fmtDur(secs)} of video`;
+}
+
+function iconBtn(name, label, disabled, onclick) {
+  return h('button', { type: 'button', class: 'icon-btn sm', title: label, 'aria-label': label, disabled: !!disabled, onclick }, icon(name, 16));
+}
+
+function autosize(t) { t.style.height = 'auto'; t.style.height = `${Math.min(t.scrollHeight + 2, 260)}px`; }
+
+function sceneCard(s, i) {
+  const total = studio.scenes.length;
+  const speakerBtn = (value, label) => h('button', {
+    type: 'button', 'aria-pressed': String(s.speaker === value),
+    onclick: () => { s.speaker = value; refreshCard(s); },
+  }, label);
+
+  const text = h('textarea', {
+    class: 'input sc-text', rows: '2', 'aria-label': `Words spoken in scene ${i + 1}`,
+    placeholder: 'What the voice says. Leave this empty for a silent scene.',
+    oninput: (e) => { s.text = e.target.value; autosize(e.target); updateStudioSum(); },
+  });
+  text.value = s.text;
+
+  const kw = h('input', {
+    class: 'input', type: 'text', 'aria-label': `Search words for scene ${i + 1}`,
+    placeholder: 'dog, park, sunny day',
+    oninput: (e) => { s.keywords = e.target.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 4); },
+  });
+  kw.value = s.keywords.join(', ');
+
+  const vis = h('input', {
+    class: 'input', type: 'text', 'aria-label': `What is on screen in scene ${i + 1}`,
+    placeholder: 'A dog running in a park',
+    oninput: (e) => { s.visual = e.target.value; },
+  });
+  vis.value = s.visual;
+
+  const m = s.media;
+  const foot = h('div', { class: 'sc-foot' },
+    m && m.thumb
+      ? h('img', { class: 'sc-thumb', src: m.thumb, alt: 'Chosen footage', referrerpolicy: 'no-referrer' })
+      : h('div', { class: 'sc-thumb' }, icon(m ? 'film' : 'wand', 20)),
+    h('div', { class: 'sc-foot-text' },
+      h('strong', {}, m ? `You chose a ${m.kind === 'image' ? 'photo' : 'video'}` : 'Footage is picked automatically'),
+      h('span', {}, m ? 'It is used for the first shot of this scene.' : 'The best match for the search words is used.')),
+    h('div', { class: 'sc-foot-actions' },
+      h('button', { class: 'btn ghost sm', type: 'button', onclick: () => togglePicker(s) }, icon('image', 16), s.picker ? 'Hide footage' : 'Choose footage'),
+      m ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { s.media = null; refreshCard(s); } }, 'Use automatic') : null));
+
+  const card = h('article', { class: 'scene-card', 'data-id': String(s.id) },
+    h('div', { class: 'sc-head' },
+      h('strong', {}, `Scene ${i + 1}`),
+      h('div', { class: 'sc-speaker', role: 'group', 'aria-label': 'Who speaks' }, speakerBtn('narrator', 'Narrator'), speakerBtn('character', 'Character')),
+      h('div', { class: 'sc-tools' },
+        iconBtn('up', 'Move up', i === 0, () => moveScene(s.id, -1)),
+        iconBtn('chevron', 'Move down', i === total - 1, () => moveScene(s.id, 1)),
+        iconBtn('copy', 'Duplicate scene', false, () => dupScene(s.id)),
+        iconBtn('trash', 'Delete scene', total <= 1, () => delScene(s.id)))),
+    text,
+    h('div', { class: 'sc-grid' },
+      h('label', {}, h('span', { class: 'sc-label' }, 'Search words (English)'), kw),
+      h('label', {}, h('span', { class: 'sc-label' }, 'What is on screen'), vis)),
+    foot,
+    s.picker ? pickerBlock(s) : null);
+  requestAnimationFrame(() => autosize(text));
+  return card;
+}
+
+function pickerBlock(s) {
+  const input = h('input', {
+    class: 'input', type: 'text', 'aria-label': 'Search for footage', placeholder: 'What should we look for? (in English)',
+    onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); searchFootage(s, e.target.value); } },
+  });
+  input.value = s.query;
+  let content = null;
+  if (s.searching) content = h('p', { class: 'picker-msg' }, 'Searching...');
+  else if (s.pickError) content = h('p', { class: 'picker-msg' }, s.pickError);
+  else if (s.results && !s.results.length) content = h('p', { class: 'picker-msg' }, 'Nothing found. Try different words.');
+  else if (s.results) {
+    content = h('div', { class: 'pick-grid' }, s.results.map((r) => h('button', {
+      type: 'button', class: `pick${s.media && s.media.id === r.id ? ' sel' : ''}`, title: r.tags || '',
+      'aria-label': `Use this ${r.kind === 'image' ? 'photo' : 'video'}${r.tags ? `: ${r.tags}` : ''}`,
+      onclick: () => { s.media = { kind: r.kind, url: r.url, id: r.id, thumb: r.thumb }; s.picker = false; refreshCard(s); },
+    }, r.thumb ? h('img', { src: r.thumb, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null,
+    h('span', { class: 'badge' }, r.kind === 'image' ? 'Photo' : 'Video'))));
+  }
+  return h('div', { class: 'picker' },
+    h('div', { class: 'picker-search' }, input,
+      h('button', { class: 'btn primary sm', type: 'button', onclick: () => searchFootage(s, input.value) }, icon('search', 16), 'Search')),
+    content);
+}
+
+function refreshCard(s) {
+  const old = $(`#studioBody [data-id="${s.id}"]`);
+  if (!old) return;
+  old.replaceWith(sceneCard(s, studio.scenes.findIndex((x) => x.id === s.id)));
+}
+
+async function searchFootage(s, q) {
+  q = String(q || '').trim();
+  if (!q) return;
+  s.query = q; s.searching = true; s.pickError = '';
+  refreshCard(s);
+  try {
+    const st = getSettings();
+    const params = new URLSearchParams({
+      q, style: studio.style, source: st.source, orientation: st.format === 'portrait' ? 'vertical' : 'horizontal',
+    });
+    s.results = (await api('GET', `/api/footage?${params}`)).items;
+  } catch (e) {
+    s.pickError = e.message;
+  }
+  s.searching = false;
+  refreshCard(s);
+}
+
+function togglePicker(s) {
+  s.picker = !s.picker;
+  refreshCard(s);
+  if (s.picker && !s.results) {
+    const q = s.keywords[0] || s.visual || s.text.split(/\s+/).slice(0, 3).join(' ');
+    if (q) searchFootage(s, q);
+  }
+}
+
+function moveScene(id, dir) {
+  const i = studio.scenes.findIndex((x) => x.id === id);
+  const j = i + dir;
+  if (j < 0 || j >= studio.scenes.length) return;
+  [studio.scenes[i], studio.scenes[j]] = [studio.scenes[j], studio.scenes[i]];
+  renderStudio(true);
+}
+function dupScene(id) {
+  const i = studio.scenes.findIndex((x) => x.id === id);
+  const c = studio.scenes[i];
+  studio.scenes.splice(i + 1, 0, newScene({ text: c.text, speaker: c.speaker, visual: c.visual, keywords: [...c.keywords], media: c.media ? { ...c.media } : null }));
+  renderStudio(true);
+}
+function delScene(id) {
+  if (studio.scenes.length <= 1) return;
+  studio.scenes = studio.scenes.filter((x) => x.id !== id);
+  renderStudio(true);
+}
+
+function renderStudio(keepScroll = false) {
+  const body = $('#studioBody');
+  const top = body.scrollTop;
+  body.replaceChildren();
+  if (studio.loading) {
+    body.append(h('p', { class: 'picker-msg' }, 'Reading your script and planning the scenes...'));
+    for (let i = 0; i < 3; i++) body.append(h('div', { class: 'scene-card' }, h('div', { class: 'sk-line' }), h('div', { class: 'sk-line' }), h('div', { class: 'sk-line short' })));
+    $('#studioSum').textContent = '';
+    $('#studioGo').disabled = true;
+    $('#studioAdd').disabled = true;
+    return;
+  }
+  $('#studioGo').disabled = false;
+  $('#studioAdd').disabled = false;
+  if (studio.warning) body.append(h('p', { class: 'studio-note' }, studio.warning));
+  studio.scenes.forEach((s, i) => body.append(sceneCard(s, i)));
+  updateStudioSum();
+  if (keepScroll) body.scrollTop = top;
+}
+
+async function openStudio(force = false) {
+  const script = el.script.value.trim();
+  if (!script) { toast('Write or paste a script first.', 'error'); el.script.focus(); return; }
+  if (state.busy) { toast('A video is still rendering. Wait for it to finish.', 'error'); return; }
+  const dlg = $('#studio');
+  if (!dlg.showModal) { toast('Please update your browser to use this feature.', 'error'); return; }
+  const reuseOld = !force && studio.snapshot === script && studio.scenes.length;
+  if (!dlg.open) dlg.showModal();
+  if (reuseOld) { studio.loading = false; renderStudio(); return; }
+  studio.loading = true;
+  renderStudio();
+  try {
+    const plan = await api('POST', '/api/plan', { script });
+    studio.style = plan.style;
+    studio.warning = plan.warning || null;
+    studio.scenes = plan.scenes.map((s) => newScene({ text: s.text, speaker: s.speaker, visual: s.visual, keywords: s.keywords }));
+    studio.snapshot = script;
+    studio.loading = false;
+    renderStudio();
+  } catch (e) {
+    studio.loading = false;
+    dlg.close();
+    toast(e.message, 'error');
+  }
+}
+
+$('#btnReview').addEventListener('click', () => openStudio());
+$('#studioReread').addEventListener('click', () => openStudio(true));
+$('#studioClose').addEventListener('click', () => $('#studio').close());
+$('#studioAdd').addEventListener('click', () => {
+  const s = newScene();
+  studio.scenes.push(s);
+  renderStudio(true);
+  const body = $('#studioBody');
+  body.scrollTop = body.scrollHeight;
+  const ta = $(`#studioBody [data-id="${s.id}"] textarea`);
+  if (ta) ta.focus();
+});
+$('#studioGo').addEventListener('click', () => {
+  const scenes = studio.scenes
+    .map((s) => ({ text: s.text.trim(), speaker: s.speaker, visual: s.visual.trim(), keywords: s.keywords, media: s.media }))
+    .filter((s) => s.text || s.visual || s.media);
+  if (!scenes.length) { toast('Add some words or a picture idea to at least one scene.', 'error'); return; }
+  $('#studio').close();
+  generate({ style: studio.style, scenes });
+});
+
 // ---------- Boot ----------
 async function boot() {
   hydrateIcons();
@@ -1150,6 +1595,10 @@ async function boot() {
   try { saved = JSON.parse(store.get('settings') || 'null'); } catch (e) {}
   applySettings(saved || {});
   selectPane('voice');
+  setAccent(store.get('accent') || 'blue');
+  syncWelcome();
+  renderMyPresets();
+  syncLibControls();
 
   el.script.value = store.get('draft') || '';
   updateCount();

@@ -18,6 +18,8 @@ npm start
 Open http://localhost:3000
 
 ## Features
+- **Write with AI:** type a topic, pick a tone, length and language, and get a full script. Urdu, Hindi, Arabic, Spanish, French, German, Portuguese and Turkish voices are included.
+- **Scene editor:** review the scenes before the video is made. Edit the words, change the search words, reorder, duplicate or delete scenes, and pick the exact video or photo for any scene.
 - **Reads any text:** plain paragraphs, articles, lists or storyboards. Long scripts are split into pieces automatically. If the AI planner is unavailable, a built-in splitter takes over.
 - **Footage matching:** results are ranked by how well their tags match each scene. Long scenes get several shots. When no good video exists, a photo with a slow zoom is used.
 - **Captions:** style presets, position, size, font, colours, background box, uppercase, words at a time, fade or pop animation, live preview. A captions file (SRT) is saved with each video.
@@ -25,6 +27,7 @@ Open http://localhost:3000
 - **Look and sound:** narrator and character voices (press the play button next to a voice to hear it), speaking speed, background music with volume, colour looks, soft fades.
 - **Output:** 16:9 or 9:16, 720p or 1080p.
 - **Library:** search, filter, watch, download, reuse a script with all its settings, delete one or all.
+- Light and dark mode, five accent colours, saved settings of your own, recent videos on the Create page, and a library with totals, sorting and a grid view.
 - Light and dark mode. Quick start presets for YouTube, Shorts/Reels/TikTok, Cinematic and Clean.
 
 ## Putting it online

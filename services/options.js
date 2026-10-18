@@ -52,4 +52,34 @@ function sanitizeOptions(b = {}) {
   };
 }
 
-module.exports = { sanitizeOptions, VOICE_RE, FONTS, LOOKS };
+// ---- scenes edited in the browser ----
+const cleanMedia = (m) => {
+  if (!m || typeof m !== 'object') return null;
+  try {
+    const u = new URL(String(m.url));
+    if (u.protocol !== 'https:' || !(u.hostname === 'pixabay.com' || u.hostname.endsWith('.pixabay.com'))) return null;
+    const thumb = (() => { try { const t = new URL(String(m.thumb)); return t.protocol === 'https:' ? t.href : null; } catch (e) { return null; } })();
+    return { kind: m.kind === 'image' ? 'image' : 'video', url: u.href, id: String(m.id || '').slice(0, 40), thumb };
+  } catch (e) { return null; }
+};
+
+function sanitizePlan(p) {
+  if (!p || !Array.isArray(p.scenes)) return null;
+  const scenes = p.scenes.slice(0, 80).map((s) => ({
+    text: String((s && s.text) || '').slice(0, 800).trim(),
+    speaker: s && s.speaker === 'character' ? 'character' : 'narrator',
+    visual: String((s && s.visual) || '').slice(0, 240).trim(),
+    keywords: (Array.isArray(s && s.keywords) ? s.keywords : []).map((k) => String(k).trim().slice(0, 60)).filter(Boolean).slice(0, 4),
+    media: cleanMedia(s && s.media),
+  })).filter((s) => s.text || s.visual || s.media);
+  if (!scenes.length) return null;
+  scenes.forEach((s) => {
+    if (!s.keywords.length) s.keywords = [s.visual || s.text.split(/\s+/).slice(0, 3).join(' ') || 'nature'];
+  });
+  return { style: p.style === 'animation' ? 'animation' : 'film', scenes };
+}
+
+const TONES = ['informative', 'friendly', 'dramatic', 'funny', 'motivational'];
+const LANGUAGES = ['English', 'Urdu', 'Hindi', 'Arabic', 'Spanish', 'French', 'German', 'Portuguese', 'Turkish'];
+
+module.exports = { sanitizeOptions, sanitizePlan, VOICE_RE, FONTS, LOOKS, TONES, LANGUAGES };

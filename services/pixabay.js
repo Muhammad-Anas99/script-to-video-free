@@ -109,10 +109,42 @@ async function findMedia(keywords, { used, style = 'film', quality = 720, photos
   return best;
 }
 
+// A list of options for the footage picker in the scene editor.
+async function searchCandidates(query, { style = 'film', photos = true, orientation = 'horizontal' } = {}) {
+  const q = String(query || '').trim();
+  if (!q) return [];
+  const videoTypes = style === 'animation' ? ['animation', 'all'] : ['all'];
+  const seen = new Set();
+  const videos = [];
+  for (const type of videoTypes) {
+    for (const h of await searchVideo(q, type)) {
+      const url = videoUrl(h, 720);
+      if (!url || seen.has('v' + h.id)) continue;
+      seen.add('v' + h.id);
+      videos.push({
+        id: 'v' + h.id, kind: 'video', url, tags: h.tags, score: relevance(h.tags, q), duration: h.duration || null,
+        thumb: h.picture_id ? `https://i.vimeocdn.com/video/${h.picture_id}_640x360.jpg` : null,
+      });
+    }
+  }
+  const images = [];
+  if (photos) {
+    for (const type of style === 'animation' ? ['illustration', 'photo'] : ['photo']) {
+      for (const h of await searchImage(q, type, orientation)) {
+        if (seen.has('i' + h.id)) continue;
+        seen.add('i' + h.id);
+        images.push({ id: 'i' + h.id, kind: 'image', url: h.largeImageURL || h.webformatURL, tags: h.tags, score: relevance(h.tags, q), thumb: h.webformatURL });
+      }
+    }
+  }
+  const byScore = (a, b) => b.score - a.score;
+  return [...videos.sort(byScore).slice(0, 8), ...images.sort(byScore).slice(0, 6)].filter((m) => m.url);
+}
+
 async function downloadFile(url, dest) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Download failed ${res.status}`);
   await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(dest));
 }
 
-module.exports = { findMedia, downloadFile, relevance };
+module.exports = { findMedia, searchCandidates, downloadFile, relevance };

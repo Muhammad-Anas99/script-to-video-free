@@ -5,10 +5,10 @@ const fs = require('fs');
 const path = require('path');
 
 const Video = require('./models/Video');
-const { analyzeScript } = require('./services/groq');
-const { findMedia, downloadFile } = require('./services/pixabay');
+const { analyzeScript, writeScript } = require('./services/groq');
+const { findMedia, searchCandidates, downloadFile } = require('./services/pixabay');
 const { synthesize } = require('./services/tts');
-const { sanitizeOptions } = require('./services/options');
+const { sanitizeOptions, sanitizePlan, TONES, LANGUAGES } = require('./services/options');
 const { buildCues, buildSceneAss, buildCardAss, toSrt } = require('./services/captions');
 const R = require('./services/render');
 const { getPreviewFile } = require('./services/preview');
@@ -30,6 +30,8 @@ app.use('/output', express.static(OUTPUT_DIR));
 
 const videoLimiter = createLimiter({ max: parseInt(process.env.MAX_VIDEOS_PER_HOUR || '0', 10), message: 'You have reached the hourly video limit.' });
 const previewLimiter = createLimiter({ max: process.env.MAX_VIDEOS_PER_HOUR ? 60 : 0, message: 'Too many voice samples.' });
+
+const toolLimiter = createLimiter({ max: process.env.MAX_VIDEOS_PER_HOUR ? parseInt(process.env.MAX_VIDEOS_PER_HOUR, 10) * 6 : 0, message: 'You have reached the hourly limit.' });
 
 const wrap = (fn) => (req, res) =>
   fn(req, res).catch((err) => {
@@ -96,7 +98,10 @@ async function processJob(id) {
 
   try {
     await setProgress(id, 'Reading your script...', { step: 'analyze' });
-    const { style, scenes, warning } = await analyzeScript(job.script);
+    const planned = job.plan && Array.isArray(job.plan.scenes) && job.plan.scenes.length ? job.plan : null;
+    const { style, scenes, warning } = planned
+      ? { style: planned.style || 'film', scenes: planned.scenes.map((sc) => ({ ...sc })), warning: null } // scenes the user already reviewed
+      : await analyzeScript(job.script);
     if (warning) warn(warning);
     await Video.findByIdAndUpdate(id, { scenes, total: scenes.length, current: 0, step: 'scenes' });
 
@@ -146,16 +151,27 @@ async function processJob(id) {
       const found = [];
       for (let j = 0; j < shots; j++) {
         const kws = rotate(s.keywords && s.keywords.length ? s.keywords : ['nature'], j);
-        const media = await findMedia(kws, {
+        const search = () => findMedia(kws, {
           used, style, quality: o.quality, photos: o.source === 'mixed', orientation: portrait ? 'vertical' : 'horizontal',
         });
+        // footage the user picked in the scene editor is used for the first shot
+        const pinned = j === 0 && s.media && s.media.url ? s.media : null;
+        if (pinned && pinned.id) used.add(pinned.id);
+        let media = pinned ? { kind: pinned.kind, url: pinned.url, thumb: pinned.thumb || null } : await search();
+        let file = null;
+        const fileFor = (m) => path.join(workDir, `m${i}_${j}.${m.kind === 'image' ? 'jpg' : 'mp4'}`);
         if (media) {
-          const file = path.join(workDir, `m${i}_${j}.${media.kind === 'image' ? 'jpg' : 'mp4'}`);
-          await downloadFile(media.url, file);
-          found.push({ file, kind: media.kind, dur: shotDur, thumb: media.thumb, url: media.url });
-        } else {
-          found.push(null);
+          file = fileFor(media);
+          try {
+            await downloadFile(media.url, file);
+          } catch (e) {
+            if (!pinned) throw e;
+            console.error('The chosen footage could not be downloaded, searching instead:', e.message);
+            media = await search();
+            if (media) { file = fileFor(media); await downloadFile(media.url, file); }
+          }
         }
+        found.push(media ? { file, kind: media.kind, dur: shotDur, thumb: media.thumb, url: media.url } : null);
       }
       const firstFound = found.find(Boolean);
       const parts = found.map((m) => m || (firstFound ? { ...firstFound } : { file: bgPng, kind: 'still' })).map((m) => ({ ...m, dur: shotDur }));
@@ -293,7 +309,8 @@ app.post('/api/videos', videoLimiter, wrap(async (req, res) => {
     if (options.watermark.type === 'image' && !logo) options.watermark.type = 'none';
     if (options.music.on && !music) options.music.on = false;
 
-    const video = await Video.create({ script, options });
+    const plan = sanitizePlan(req.body.plan);
+    const video = await Video.create({ script, options, plan });
     const dir = path.join(TEMP_DIR, String(video._id));
     fs.mkdirSync(dir, { recursive: true });
     if (logo) fs.writeFileSync(path.join(dir, 'wm.img'), logo);
@@ -317,6 +334,43 @@ app.get('/api/voice-preview', previewLimiter, async (req, res) => {
     if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error('Voice sample failed:', err.message);
     res.status(503).json({ error: 'The voice sample is not available right now. Please try again.' });
+  }
+});
+
+// Reads a script and returns the scenes so the browser can show them for editing.
+app.post('/api/plan', toolLimiter, wrap(async (req, res) => {
+  const script = String(req.body.script || '').trim();
+  if (!script) return res.status(400).json({ error: 'Write or paste a script first.' });
+  if (script.length > 20000) return res.status(400).json({ error: 'Script is too long (max 20,000 characters)' });
+  const { style, scenes, warning } = await analyzeScript(script);
+  res.json({ style, warning, scenes: scenes.map((sc) => ({ text: sc.text, speaker: sc.speaker, visual: sc.visual, keywords: sc.keywords })) });
+}));
+
+// Footage options for one scene (the picker in the scene editor).
+app.get('/api/footage', toolLimiter, wrap(async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 100);
+  if (!q) return res.status(400).json({ error: 'Type what you want to see.' });
+  const items = await searchCandidates(q, {
+    style: req.query.style === 'animation' ? 'animation' : 'film',
+    photos: req.query.source !== 'video',
+    orientation: req.query.orientation === 'vertical' ? 'vertical' : 'horizontal',
+  });
+  res.json({ items });
+}));
+
+// Writes a script from a topic.
+app.post('/api/write', toolLimiter, async (req, res) => {
+  try {
+    const topic = String(req.body.topic || '').trim().slice(0, 300);
+    if (topic.length < 3) return res.status(400).json({ error: 'Tell me what the video is about.' });
+    const tone = TONES.includes(req.body.tone) ? req.body.tone : 'informative';
+    const language = LANGUAGES.includes(req.body.language) ? req.body.language : 'English';
+    const seconds = [30, 60, 90, 120, 180].includes(Number(req.body.seconds)) ? Number(req.body.seconds) : 60;
+    const style = req.body.style === 'animation' ? 'animation' : 'film';
+    res.json({ script: await writeScript({ topic, tone, language, seconds, style }) });
+  } catch (err) {
+    console.error('Script writing failed:', err.message);
+    res.status(503).json({ error: 'The writing assistant is busy. Please try again in a moment.' });
   }
 });
 

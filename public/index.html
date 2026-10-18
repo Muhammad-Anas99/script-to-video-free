@@ -16,7 +16,7 @@
     // Set the theme before first paint to avoid a flash.
     (function () {
       var saved = null;
-      try { saved = localStorage.getItem('theme'); } catch (e) {}
+      try { saved = localStorage.getItem('theme'); var a = localStorage.getItem('accent'); if (a && a !== 'blue') document.documentElement.dataset.accent = a; } catch (e) {}
       var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     })();
@@ -47,6 +47,16 @@
 
   <div class="nav-actions">
     <button class="btn ghost sm" id="newBtn" type="button"><span data-icon="plus" data-size="16"></span>New script</button>
+    <div class="pal-wrap">
+      <button class="icon-btn" id="accentBtn" type="button" aria-label="Choose accent colour" aria-expanded="false" title="Accent colour"><span data-icon="palette"></span></button>
+      <div class="popover" id="accentMenu" role="group" aria-label="Accent colour" hidden>
+        <button type="button" class="swatch" data-accent="blue" style="--sw:#3a3fe8" aria-label="Blue" title="Blue"></button>
+        <button type="button" class="swatch" data-accent="violet" style="--sw:#7b3fe4" aria-label="Violet" title="Violet"></button>
+        <button type="button" class="swatch" data-accent="teal" style="--sw:#0e8f86" aria-label="Teal" title="Teal"></button>
+        <button type="button" class="swatch" data-accent="rose" style="--sw:#d6336c" aria-label="Rose" title="Rose"></button>
+        <button type="button" class="swatch" data-accent="orange" style="--sw:#c2570a" aria-label="Orange" title="Orange"></button>
+      </div>
+    </div>
     <button class="icon-btn" id="themeBtn" type="button" aria-label="Switch between light and dark mode" title="Switch theme">
       <span class="ico-sun" data-icon="sun"></span>
       <span class="ico-moon" data-icon="moon"></span>
@@ -63,6 +73,15 @@
       <p>Paste any text, choose how it looks and sounds, and get a finished video with voiceover, matching footage and captions.</p>
     </div>
 
+    <div class="welcome" id="welcome" hidden>
+      <div class="welcome-text"><strong>New here?</strong> Press <b>Sample</b>, then <b>Generate video</b>. Your first video takes about a minute.</div>
+      <div class="welcome-actions">
+        <button class="btn primary sm" id="welcomeTry" type="button"><span data-icon="wand" data-size="16"></span>Try a sample</button>
+        <a class="btn ghost sm" href="#guide">Read the guide</a>
+        <button class="icon-btn sm" id="welcomeClose" type="button" aria-label="Dismiss this tip"><span data-icon="x" data-size="16"></span></button>
+      </div>
+    </div>
+
     <div class="studio">
       <div class="left">
 
@@ -70,6 +89,7 @@
           <div class="panel-bar">
             <h2>Your script</h2>
             <div class="bar-actions">
+              <button class="btn ghost sm" id="btnWrite" type="button"><span data-icon="sparkle" data-size="16"></span>Write with AI</button>
               <button class="btn ghost sm" id="btnSample" type="button"><span data-icon="shuffle" data-size="16"></span>Sample</button>
               <button class="btn ghost sm" id="btnPaste" type="button"><span data-icon="clipboard" data-size="16"></span>Paste</button>
               <button class="btn ghost sm" id="btnOpenFile" type="button"><span data-icon="upload" data-size="16"></span>Open file</button>
@@ -89,13 +109,17 @@
 
         <div class="panel settings">
           <div class="quick">
-            <span class="field-label">Quick start</span>
+            <div class="quick-head">
+              <span class="field-label">Quick start</span>
+              <button class="btn ghost sm" id="savePreset" type="button"><span data-icon="plus" data-size="16"></span>Save my settings</button>
+            </div>
             <div class="chips">
               <button class="chip" type="button" data-preset="youtube">YouTube video</button>
               <button class="chip" type="button" data-preset="shorts">Shorts, Reels, TikTok</button>
               <button class="chip" type="button" data-preset="cinematic">Cinematic story</button>
               <button class="chip" type="button" data-preset="clean">Clean, no captions</button>
             </div>
+            <div class="chips my-presets" id="myPresets" hidden></div>
           </div>
 
           <div class="tabbar" role="tablist" aria-label="Video settings">
@@ -374,11 +398,14 @@
           </div>
         </div>
 
-        <button class="btn primary lg" id="go" type="button">
-          <span data-icon="film" data-size="20"></span>
-          <span id="goLabel">Generate video</span>
-          <span class="hint">Ctrl + Enter</span>
-        </button>
+        <div class="go-row">
+          <button class="btn primary lg" id="go" type="button">
+            <span data-icon="film" data-size="20"></span>
+            <span id="goLabel">Generate video</span>
+            <span class="hint">Ctrl + Enter</span>
+          </button>
+          <button class="btn ghost lg" id="btnReview" type="button" title="Check and edit the scenes before the video is made"><span data-icon="layers" data-size="20"></span>Review scenes</button>
+        </div>
       </div>
 
       <div class="stage">
@@ -423,6 +450,11 @@
           <summary>Scene breakdown</summary>
           <ol id="sceneList"></ol>
         </details>
+
+        <section class="panel recent" id="recent" hidden aria-label="Recent videos">
+          <div class="panel-bar"><h2>Recent videos</h2><a class="link" href="#library">See all</a></div>
+          <div class="recent-row" id="recentRow"></div>
+        </section>
       </div>
     </div>
   </section>
@@ -441,6 +473,8 @@
       </div>
     </div>
 
+    <div class="tiles" id="libTiles" hidden></div>
+
     <div class="lib-tools">
       <label class="search">
         <span data-icon="search" data-size="18"></span>
@@ -452,9 +486,22 @@
         <button class="chip" data-filter="working" type="button">In progress</button>
         <button class="chip" data-filter="error" type="button">Failed</button>
       </div>
+      <div class="chips" role="group" aria-label="Sort by">
+        <button class="chip on" data-sort="new" type="button">Newest</button>
+        <button class="chip" data-sort="old" type="button">Oldest</button>
+        <button class="chip" data-sort="long" type="button">Longest</button>
+      </div>
+      <div class="view-toggle" role="group" aria-label="View">
+        <button class="icon-btn sm on" id="viewList" type="button" aria-label="List view" aria-pressed="true"><span data-icon="list" data-size="16"></span></button>
+        <button class="icon-btn sm" id="viewGrid" type="button" aria-label="Grid view" aria-pressed="false"><span data-icon="grid" data-size="16"></span></button>
+      </div>
     </div>
 
-    <ul class="reels" id="reels"></ul>
+    <ul class="reels" id="reels">
+      <li class="reel skeleton" aria-hidden="true"><div class="thumb"></div><div><div class="sk-line"></div><div class="sk-line short"></div></div></li>
+      <li class="reel skeleton" aria-hidden="true"><div class="thumb"></div><div><div class="sk-line"></div><div class="sk-line short"></div></div></li>
+      <li class="reel skeleton" aria-hidden="true"><div class="thumb"></div><div><div class="sk-line"></div><div class="sk-line short"></div></div></li>
+    </ul>
   </section>
 
   <!-- ============ GUIDE ============ -->
@@ -529,6 +576,7 @@
 
 <footer class="foot">
   <span>&copy; <span id="year">2026</span> <strong>Anas Khalid</strong>. All rights reserved.</span>
+  <button class="linkbtn" id="btnShortcuts" type="button">Keyboard shortcuts</button>
 </footer>
 
 <dialog id="confirm" class="dialog" aria-labelledby="confirmTitle">
@@ -539,6 +587,109 @@
       <button class="btn ghost" value="cancel" type="submit">Cancel</button>
       <button class="btn danger" value="ok" id="confirmOk" type="submit">Delete</button>
     </div>
+  </form>
+</dialog>
+
+<dialog id="studio" class="dialog wide" aria-labelledby="studioTitle">
+  <div class="studio-head">
+    <div>
+      <h3 id="studioTitle">Review your scenes</h3>
+      <p id="studioSub">Edit the words, change the search words, or pick the exact footage for any scene. Then make the video.</p>
+    </div>
+    <div class="studio-head-actions">
+      <button class="btn ghost sm" id="studioReread" type="button"><span data-icon="reuse" data-size="16"></span>Read script again</button>
+      <button class="icon-btn" id="studioClose" type="button" aria-label="Close"><span data-icon="x"></span></button>
+    </div>
+  </div>
+  <div class="studio-body" id="studioBody"></div>
+  <div class="studio-foot">
+    <div class="studio-sum" id="studioSum"></div>
+    <div class="dialog-actions">
+      <button class="btn ghost" id="studioAdd" type="button"><span data-icon="plus" data-size="16"></span>Add scene</button>
+      <button class="btn primary" id="studioGo" type="button"><span data-icon="film" data-size="18"></span>Make video from these scenes</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="writer" class="dialog" aria-labelledby="writerTitle">
+  <h3 id="writerTitle">Write a script with AI</h3>
+  <p class="dialog-sub">Tell me what your video is about. I will write the scenes, the narration and ideas for the footage.</p>
+  <div class="fields">
+    <label class="field"><span class="field-label">Topic</span>
+      <textarea class="input" id="wTopic" rows="3" maxlength="300" placeholder="For example: 5 surprising facts about octopuses"></textarea></label>
+    <fieldset class="field pills">
+      <legend class="field-label">Tone</legend>
+      <div class="pill-row">
+        <label><input type="radio" name="wTone" value="informative" checked /><span>Informative</span></label>
+        <label><input type="radio" name="wTone" value="friendly" /><span>Friendly</span></label>
+        <label><input type="radio" name="wTone" value="dramatic" /><span>Dramatic</span></label>
+        <label><input type="radio" name="wTone" value="funny" /><span>Funny</span></label>
+        <label><input type="radio" name="wTone" value="motivational" /><span>Motivational</span></label>
+      </div>
+    </fieldset>
+    <fieldset class="field pills">
+      <legend class="field-label">Length</legend>
+      <div class="pill-row">
+        <label><input type="radio" name="wLen" value="30" /><span>30 seconds</span></label>
+        <label><input type="radio" name="wLen" value="60" checked /><span>1 minute</span></label>
+        <label><input type="radio" name="wLen" value="90" /><span>1.5 minutes</span></label>
+        <label><input type="radio" name="wLen" value="120" /><span>2 minutes</span></label>
+      </div>
+    </fieldset>
+    <fieldset class="field seg">
+      <legend class="field-label">Footage style</legend>
+      <div class="seg-row">
+        <label><input type="radio" name="wStyle" value="film" checked /><span>Real footage</span></label>
+        <label><input type="radio" name="wStyle" value="animation" /><span>Cartoon</span></label>
+      </div>
+    </fieldset>
+    <fieldset class="field pills">
+      <legend class="field-label">Language of the voiceover</legend>
+      <div class="pill-row">
+        <label><input type="radio" name="wLang" value="English" checked /><span>English</span></label>
+        <label><input type="radio" name="wLang" value="Urdu" /><span>Urdu</span></label>
+        <label><input type="radio" name="wLang" value="Hindi" /><span>Hindi</span></label>
+        <label><input type="radio" name="wLang" value="Arabic" /><span>Arabic</span></label>
+        <label><input type="radio" name="wLang" value="Spanish" /><span>Spanish</span></label>
+        <label><input type="radio" name="wLang" value="French" /><span>French</span></label>
+        <label><input type="radio" name="wLang" value="German" /><span>German</span></label>
+        <label><input type="radio" name="wLang" value="Portuguese" /><span>Portuguese</span></label>
+        <label><input type="radio" name="wLang" value="Turkish" /><span>Turkish</span></label>
+      </div>
+    </fieldset>
+  </div>
+  <div class="dialog-actions">
+    <button class="btn ghost" id="wCancel" type="button">Cancel</button>
+    <button class="btn primary" id="wGo" type="button"><span data-icon="sparkle" data-size="16"></span><span id="wGoLabel">Write script</span></button>
+  </div>
+</dialog>
+
+<dialog id="nameDlg" class="dialog" aria-labelledby="nameTitle">
+  <form method="dialog">
+    <h3 id="nameTitle">Save your settings</h3>
+    <p class="dialog-sub">Give this mix of voice, captions and look a name to use it again with one click.</p>
+    <input class="input" id="presetName" type="text" maxlength="30" placeholder="For example: My YouTube style" aria-label="Preset name" />
+    <div class="dialog-actions">
+      <button class="btn ghost" value="cancel" type="submit">Cancel</button>
+      <button class="btn primary" value="ok" id="presetOk" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="shortcuts" class="dialog" aria-labelledby="shortcutsTitle">
+  <form method="dialog">
+    <h3 id="shortcutsTitle">Keyboard shortcuts</h3>
+    <table class="ref keys">
+      <tbody>
+        <tr><td><kbd>Ctrl</kbd> + <kbd>Enter</kbd></td><td>Generate the video (while typing in the script)</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Open this list</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Close a menu or window</td></tr>
+        <tr><td><kbd>&uarr;</kbd> <kbd>&darr;</kbd></td><td>Move through a voice or font list</td></tr>
+        <tr><td><kbd>&rarr;</kbd></td><td>Hear the highlighted voice</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Pick the highlighted option</td></tr>
+      </tbody>
+    </table>
+    <div class="dialog-actions"><button class="btn primary" value="ok" type="submit">Close</button></div>
   </form>
 </dialog>
 

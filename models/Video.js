@@ -20,6 +20,7 @@ const VideoSchema = new mongoose.Schema(
     current: { type: Number, default: 0 }, // scenes finished so far
     total: { type: Number, default: 0 }, // scenes in total
     options: { type: mongoose.Schema.Types.Mixed, default: {} },
+    plan: { type: mongoose.Schema.Types.Mixed }, // scenes the user reviewed and edited
     scenes: [SceneSchema],
     videoFile: String,
     posterFile: String,
